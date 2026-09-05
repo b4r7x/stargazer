@@ -1,6 +1,6 @@
 {
   "name": "@diffgazer/keys",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Composable, scoped keyboard navigation hooks for React",
   "license": "MIT",
   "author": "diffgazer",
