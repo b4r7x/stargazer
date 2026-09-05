@@ -32,7 +32,7 @@ const KEYS_PACKAGE_ONLY = new Set([
  */
 export const HOSTED_REGISTRY_GATED = false;
 
-export const PUBLISH_GATED = true;
+const PUBLISH_GATED = true;
 
 /** Kept as a literal so the client bundle stays clear of the registry barrel; consumption-metadata.test.ts pins it to REGISTRY_ORIGIN. */
 const HOSTED_REGISTRY_ORIGIN = "https://r.b4r7.dev";

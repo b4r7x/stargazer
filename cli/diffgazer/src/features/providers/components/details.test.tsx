@@ -5,7 +5,7 @@ import {
 } from "@diffgazer/core/providers";
 import { CONFORMANCE_TEST_COST_DISCLOSURE } from "@diffgazer/core/schemas/config";
 import {
-  configurationStatus,
+  type configurationStatus,
   configuredRow,
   GEMINI_CONFIGURATION,
   OPENCODE_GO_CONFIGURATION,
