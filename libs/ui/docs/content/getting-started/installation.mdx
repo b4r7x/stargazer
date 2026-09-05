@@ -7,18 +7,19 @@ description: Initialize a project with dgadd and add `@diffgazer/ui` components 
 
 > **Installing via dgadd:** Components are namespaced (`ui/button`, `ui/dialog`). For the full command and flag reference — `init`, `add`, `list`, `diff`, `remove` — see the [dgadd CLI reference](/app/cli).
 
-> **npm packages:** `@diffgazer/add`, `@diffgazer/ui`, and `@diffgazer/keys` are publish-gated and not on npm, so there is no `dgadd` bin until you install one. Follow the [Copy-first mode procedure](https://github.com/b4r7x/diffgazer#copy-first-mode-dgadd) to build and pack `@diffgazer/add` from a checkout, then install that tarball in the target app; that install is what puts `dgadd` on `pnpm exec`. Components also install without a checkout from the hosted registry: `npx shadcn add https://r.b4r7.dev/r/ui/<item>.json`.
+> **npm packages:** `@diffgazer/add` is on npm. `pnpm add -D @diffgazer/add` puts `dgadd` on `pnpm exec`, and `npx @diffgazer/add <command>` runs it without the install. Components also install without `dgadd` from the hosted registry: `npx shadcn add https://r.b4r7.dev/r/ui/<item>.json`.
 
 ## Install
 
-With the packed `@diffgazer/add` tarball installed in the target app, run the installer and add a component:
+Add `@diffgazer/add` as a dev dependency, then run the installer and add a component:
 
 ```bash
+pnpm add -D @diffgazer/add
 pnpm exec dgadd init
 pnpm exec dgadd add ui/button
 ```
 
-The one-shot `pnpm dlx`/`npx @diffgazer/add` commands work only if `@diffgazer/add` is published — see [Package managers](#package-managers).
+The one-shot `pnpm dlx`/`npx @diffgazer/add` commands do the same without the dev dependency — see [Package managers](#package-managers).
 
 ## Setup
 
@@ -127,7 +128,7 @@ pnpm exec dgadd add ui/menu --integration keys
 
 ## Package managers [#package-managers]
 
-`@diffgazer/add` is publish-gated and not on npm, so these one-shot commands fail today. They work only if the package is published:
+`@diffgazer/add` is on npm, so the one-shot form works with every package manager:
 
 ```bash
 pnpm dlx @diffgazer/add init

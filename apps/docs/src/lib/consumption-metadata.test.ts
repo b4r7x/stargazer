@@ -23,8 +23,10 @@ describe("consumption metadata API", () => {
     );
     expect(meta.paths.copy.note).toBeUndefined();
     expect(meta.paths.dgadd.command).toBe("pnpm exec dgadd add ui/compose-refs");
-    expect(meta.paths.dgadd.note).toContain("install that tarball");
-    expect(meta.paths.package.available).toBe(false);
+    expect(meta.paths.dgadd.note).toContain("pnpm add -D @diffgazer/add");
+    expect(meta.paths.package.available).toBe(true);
+    expect(meta.paths.package.command).toBe("npm install @diffgazer/ui @diffgazer/keys");
+    expect(meta.paths.package.note).toBeUndefined();
   });
 
   it("maps prefixed keys hook docs to registry ids without double use prefixes", () => {
@@ -37,7 +39,9 @@ describe("consumption metadata API", () => {
       `npx shadcn add ${REGISTRY_ORIGIN}/r/keys/navigation.json`,
     );
     expect(meta.paths.dgadd.command).toBe("pnpm exec dgadd add keys/navigation");
-    expect(meta.paths.dgadd.note).toContain("install that tarball");
+    expect(meta.paths.dgadd.note).toContain("pnpm add -D @diffgazer/add");
+    expect(meta.paths.package.available).toBe(true);
+    expect(meta.paths.package.command).toBe("npm install @diffgazer/keys");
   });
 
   it("marks provider-backed keys hooks as package-only while keeping package import metadata", () => {
@@ -47,15 +51,15 @@ describe("consumption metadata API", () => {
     expect(meta.packageImport).toBe("@diffgazer/keys");
     expect(meta.paths.copy.available).toBe(false);
     expect(meta.paths.dgadd.available).toBe(false);
-    expect(meta.paths.package.available).toBe(false);
-    expect(meta.paths.package.note).toContain("not published to npm");
+    expect(meta.paths.package.available).toBe(true);
+    expect(meta.paths.package.command).toBe("npm install @diffgazer/keys");
   });
 
-  it("closes the copy and dgadd paths for package-only keys hooks by classification, not the gate", () => {
+  it("closes the copy and dgadd paths for package-only keys hooks by classification", () => {
     const meta = getConsumptionMetadata("keys", "use-key", "hook");
 
     // `keys/key` exists in no registry, so both paths stay shut and say why in
-    // package-only terms — the publish-gate notes would go stale on release.
+    // package-only terms.
     expect(meta.dgaddName).toBe("keys/key");
     expect(meta.paths.copy.available).toBe(false);
     expect(meta.paths.copy.note).toContain("Requires KeyboardProvider");
@@ -65,7 +69,7 @@ describe("consumption metadata API", () => {
   });
 });
 
-describe("consumption metadata publish gate", () => {
+describe("consumption metadata hosted registry", () => {
   it("keys README and installation docs install from the live hosted registry", () => {
     const keysReadme = readRepoFile("libs/keys/README.md");
     const installation = readRepoFile("libs/keys/docs/content/getting-started/installation.mdx");

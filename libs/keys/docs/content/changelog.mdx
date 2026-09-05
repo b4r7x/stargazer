@@ -3,6 +3,17 @@ title: Changelog
 description: Release notes for `@diffgazer/keys`.
 ---
 
+## 0.3.0
+
+### Minor changes
+
+- Added `hasModifierKey(event)` to the public entry: `true` when `altKey`, `ctrlKey`, `metaKey`, or `shiftKey` is held. Use it as the "this key is unmodified, so the widget owns it" guard, not for letter hotkeys, which already encode Shift in `event.key`.
+- Added the `moveHighlight` list-navigation helper, with the `HighlightNavigationItem` and `MoveHighlightResult` types, to the public entry.
+- `isListNavigationKey` now returns `true` for `j` and `k`, and `getVerticalArrowDirection` maps `k` to `"up"` and `j` to `"down"`. Uppercase `J`/`K` are unaffected. A suppression guard of the shape `if (isListNavigationKey(event.key)) event.preventDefault()` now swallows those two characters too; re-check any that sit near text entry.
+- Copy targets are described as `@hooks/...` alias tokens instead of hardcoded `src/` paths, so a copied hook lands under the consumer's configured source root. The `navigation` item also copies the `hotkey` helper it depends on.
+- Focus restoration and focus traps work across owner documents and shadow roots, and action-row focus repair no longer steals focus.
+- Correctness and accessibility fixes across the hooks and utilities.
+
 ## 0.2.0
 
 ### Minor changes

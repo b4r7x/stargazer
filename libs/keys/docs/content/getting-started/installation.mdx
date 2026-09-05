@@ -7,7 +7,7 @@ description: Install `@diffgazer/keys` as a package, or copy standalone hooks in
 
 > **Installing via dgadd:** Only standalone hooks (`keys/navigation`, `keys/focus-trap`, `keys/focus-restore`, `keys/scroll-lock`) are copyable; provider-backed hooks are package-only. For the full command and flag reference — `init`, `add`, `list`, `diff`, `remove` — see the [dgadd CLI reference](/app/cli).
 
-> **npm packages:** `@diffgazer/add`, `@diffgazer/ui`, and `@diffgazer/keys` are publish-gated and not on npm, so `npm install @diffgazer/keys` fails and there is no `dgadd` bin until you install tarballs. Pack the workspace packages from a checkout and install those tarballs in the target app — see the canonical [Consumption Paths](https://github.com/b4r7x/diffgazer#consumption-paths) section. Standalone hooks also install without a checkout from the hosted registry: `npx shadcn add https://r.b4r7.dev/r/keys/navigation.json`.
+> **npm packages:** `@diffgazer/keys` is on npm (`npm install @diffgazer/keys`), and so is `@diffgazer/add`: `pnpm add -D @diffgazer/add` puts `dgadd` on `pnpm exec` — see the canonical [Consumption Paths](https://github.com/b4r7x/diffgazer#consumption-paths) section. Standalone hooks also install without either package from the hosted registry: `npx shadcn add https://r.b4r7.dev/r/keys/navigation.json`.
 
 ## Package install
 
@@ -16,20 +16,6 @@ Use the package when you need provider-backed hooks: `KeyboardProvider`, `useKey
 <Steps>
 
 <Step title="Install the package">
-
-The package is not on npm, so pack `@diffgazer/keys` from a checkout of the repository:
-
-```bash
-pnpm --filter @diffgazer/keys pack --pack-destination /tmp/diffgazer-packs
-```
-
-Then install that tarball in the target app:
-
-```bash
-npm install /tmp/diffgazer-packs/diffgazer-keys-*.tgz
-```
-
-If `@diffgazer/keys` is published, this becomes:
 
 ```bash
 npm install @diffgazer/keys
@@ -57,7 +43,10 @@ Use `dgadd` for source-owned standalone hooks with no package runtime dependency
 
 <Step title="Initialize dgadd">
 
+`dgadd` ships with `@diffgazer/add`; the dev-dependency install puts it on `pnpm exec`:
+
 ```bash
+pnpm add -D @diffgazer/add
 pnpm exec dgadd init
 ```
 

@@ -71,7 +71,7 @@ test("public docs handoff uses the exact React peer floor", () => {
   assert.doesNotMatch(docs, /React 19\+|React 19\.2\+/);
 });
 
-test("public install snippets stay local-first or publish-gated", () => {
+test("public install snippets name the npm packages they run from", () => {
   const docs = [
     "libs/ui/README.md",
     "libs/keys/README.md",
@@ -85,8 +85,12 @@ test("public install snippets stay local-first or publish-gated", () => {
   ];
   const installCommand =
     /npx @diffgazer\/add|pnpm dlx @diffgazer\/add|yarn dlx @diffgazer\/add|bunx @diffgazer\/add|npm install @diffgazer\/|npm install -g diffgazer|pnpm exec dgadd/;
-  const publishGate =
-    /not yet published to npm|first release|local checkout|npm view|publish-gated|After Publication|after publication|after `@diffgazer\/add` is published|after its npm package is published/;
+  // Every scoped package is on npm, so a page that runs one has to say where it
+  // comes from, and none of the pre-publish wording may survive.
+  const npmSource =
+    /npm install @diffgazer\/|pnpm add -D @diffgazer\/add|npx @diffgazer\/add|(?:is|are) on npm/;
+  const stalePublishGate =
+    /publish-gated|not (?:yet )?published to npm|not on npm|packed tarball|stays? unpublished|is ever published|if (?:the package|it) is published/;
 
   for (const path of docs) {
     const source = readRepoFile(path);
@@ -97,7 +101,8 @@ test("public install snippets stay local-first or publish-gated", () => {
       continue;
     }
 
-    assert.match(source, publishGate, path);
+    assert.match(source, npmSource, path);
+    assert.doesNotMatch(source, stalePublishGate, path);
   }
 });
 
@@ -129,7 +134,7 @@ test("public READMEs show the consumption path matrix", () => {
   assert.match(cliReadme, /@diffgazer\/keys/);
 
   for (const readme of [rootReadme, uiReadme, keysReadme, cliReadme]) {
-    assert.match(readme, /publish-gated|not yet published to npm/);
+    assert.match(readme, /(?:is|are) on npm/);
   }
 });
 

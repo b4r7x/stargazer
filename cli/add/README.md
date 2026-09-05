@@ -11,33 +11,24 @@ Installer CLI for adding Diffgazer UI components and keys hooks to your React pr
 
 `dgadd` is one of three consumption paths. The other two are direct shadcn/manual copy from the hosted registry, and npm package install.
 
-> **Availability:** the hosted registry at `https://r.b4r7.dev` is live, so `npx shadcn add https://r.b4r7.dev/r/ui/<item>.json` installs components without a checkout. The npm package names (`@diffgazer/add`, `@diffgazer/ui`, `@diffgazer/keys`) are publish-gated until `npm view` returns versions, so a locally packed tarball is the only working `dgadd` install path, and every command below is run from a target app that already has that tarball installed.
+> **Availability:** `@diffgazer/add` is on npm (`npm view @diffgazer/add version`), and so are `@diffgazer/ui` and `@diffgazer/keys`. The hosted registry at `https://r.b4r7.dev` is live as well, so `npx shadcn add https://r.b4r7.dev/r/ui/<item>.json` installs components without `dgadd`. Every command below runs from the target app, except the workspace steps under [Testing a local build](#testing-a-local-build).
 
-## Install from a packed tarball
+## Install
 
-Pack the CLI from this workspace and install the tarball into the target app:
-
-From this repository:
-
-```bash
-pnpm --filter @diffgazer/add build
-pnpm --filter @diffgazer/add pack --pack-destination /tmp/diffgazer-packs
-```
-
-From the target app, install the tarball with the package manager your project already uses:
+Add `@diffgazer/add` as a dev dependency with the package manager your project already uses:
 
 ```bash
 # npm
-npm install --save-dev /tmp/diffgazer-packs/diffgazer-add-*.tgz
+npm install --save-dev @diffgazer/add
 
 # pnpm
-pnpm add -D /tmp/diffgazer-packs/diffgazer-add-*.tgz
+pnpm add -D @diffgazer/add
 
 # yarn
-yarn add -D /tmp/diffgazer-packs/diffgazer-add-*.tgz
+yarn add -D @diffgazer/add
 
 # bun
-bun add -D /tmp/diffgazer-packs/diffgazer-add-*.tgz
+bun add -D @diffgazer/add
 ```
 
 Then initialize and add your first item with that same package manager:
@@ -83,9 +74,9 @@ pnpm exec dgadd add ui/input keys/navigation
 pnpm exec dgadd list
 ```
 
-## npm commands (publish-gated)
+## Run without installing
 
-These commands work only if `@diffgazer/add` is published, which `npm view @diffgazer/add version` confirms:
+`npx` fetches `@diffgazer/add` on demand, so the dev dependency is optional; `pnpm dlx`, `yarn dlx`, and `bunx` work the same way:
 
 ```bash
 npx @diffgazer/add init
@@ -147,7 +138,7 @@ pnpm exec dgadd ui/button
 | `--keys-version <version>` | Version/range used by `@diffgazer/keys` package mode | caret range of the bundled `@diffgazer/keys` release |
 | `-y, --yes` | Skip confirmation prompts | `false` |
 
-`copy` mode installs bundled offline hook source. `keys` mode rewrites local hook imports to `@diffgazer/keys` and installs the package dependency, so use it only when `@diffgazer/keys` resolves: from a local tarball, or from npm if the package is published. `--yes` uses `copy` mode for components that require keyboard hooks; `none` is rejected for those components because it would leave unresolved local hook imports.
+`copy` mode installs bundled offline hook source. `keys` mode rewrites local hook imports to `@diffgazer/keys` and installs the package dependency, so it needs `@diffgazer/keys` to resolve from npm. `--yes` uses `copy` mode for components that require keyboard hooks; `none` is rejected for those components because it would leave unresolved local hook imports.
 
 When re-adding an installed keyboard component with a different integration mode, `dgadd` stops before writing and asks for `--overwrite`. With `--overwrite`, it rewrites the component files and migrates copied hook files and their ownership records to the requested mode.
 
@@ -221,7 +212,7 @@ Running `dgadd init` creates a `diffgazer.json` file in your project root. For a
 ```json
 {
   "$schema": "https://r.b4r7.dev/schema/diffgazer.json",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "aliases": {
     "components": "@/components/ui",
     "utils": "@/lib/utils",
@@ -249,6 +240,20 @@ Running `dgadd init` creates a `diffgazer.json` file in your project root. For a
 ## Platform support
 
 `dgadd init` installs companion npm dependencies through your detected package manager (`npm`, `pnpm`, `yarn`, or `bun`). On Windows, those shims are launched through `cmd.exe` so Node 22+ can spawn them safely (CVE-2024-27980). Release CI currently runs on Linux only; Windows install behavior is covered by unit tests in `@diffgazer/registry`, not a Windows CI job.
+
+## Testing a local build
+
+To try an unreleased build, pack the CLI from this workspace (after the root build; a focused build needs the compiled `@diffgazer/registry`) and install the tarball in place of the npm package:
+
+```bash
+# from this workspace
+pnpm --filter @diffgazer/registry build
+pnpm --filter @diffgazer/add build
+pnpm --filter @diffgazer/add pack --pack-destination /tmp/diffgazer-packs
+
+# from the target app
+pnpm add -D /tmp/diffgazer-packs/diffgazer-add-*.tgz
+```
 
 ## License
 

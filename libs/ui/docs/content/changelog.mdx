@@ -3,12 +3,23 @@ title: Changelog
 description: Release notes for `@diffgazer/ui`.
 ---
 
-## Unreleased
+## 0.3.0
+
+### Minor changes
+
+- `Menu` and `NavigationList` take a `typeahead` prop (default `true`). Set `typeahead={false}` on a list whose screen advertises printable keys as shortcuts; the list then buffers no characters and every key reaches your hotkey layer.
+- Typeahead claims a keystroke only once its query has matched an item, and while a matched query is being narrowed. A first press that matches nothing falls through, so a window-level hotkey layer that skips `defaultPrevented` events (such as `KeyboardProvider` from `@diffgazer/keys`) sees `/`, `?`, `q`, and digits while a list has focus.
+- `Menu`, `NavigationList`, `RadioGroup`, and `CheckboxGroup` accept `k` wherever they accept `ArrowUp` and `j` wherever they accept `ArrowDown`. Roving focus, `aria-activedescendant`, disabled skipping, and boundary callbacks are unchanged. Typeahead reserves `j`/`k` rather than consuming them: on an empty query they move the highlight, during a query they extend it, and they never start one (`useTypeaheadBuffer` gained an `extendOnly` option for this).
+- Modal `DialogContent` renders a close icon by default, last in the DOM so it stays the final tab stop. Pass `closeIcon={false}` to opt out; inline dialogs still compose `Dialog.CloseIcon` explicitly.
+- `ScrollArea` gains an `overlay` prop (vertical orientation only): the native scrollbar is hidden and a draggable floating thumb renders above the content, so rows can run border-to-border. `scrollAreaVariants` gains a `scrollbar` dimension (`thin` default, `overlay`). Touch devices keep their native indicator.
+- `@diffgazer/ui/lib/focus-outline` (`FOCUS_OUTLINE`, `FOCUS_OUTLINE_INSET`, `HIGHLIGHT_OUTLINE`) and `@diffgazer/ui/lib/marker-rail` (`MARKER_RAIL_BASE`, `MARKER_RAIL_SELECTED`, `MARKER_RAIL_ON_INVERTED`) are package exports; the copy path already installed both as ride-along items.
+- Form, focus, keyboard, SSR, and accessibility fixes across the component, hook, and lib surfaces, and refreshed base theme tokens.
 
 ### Removals
 
 - `HorizontalStepperProps.steps` — the run is now derived from the rendered `HorizontalStepper.Step` children, which register themselves in document order. Drop the prop; the steps you render are the run.
 - `CommandPaletteItemMetadata` — folded into `CommandPaletteItemRegistration`, which carries the same fields directly.
+- `MenuItemRadio` `value` prop — it was never read; drop it.
 
 ### Changes
 
@@ -16,6 +27,16 @@ description: Release notes for `@diffgazer/ui`.
 - `DialogContentProps` is a discriminated union on `modal`: a modal dialog takes `modal?: true` with `role`, `closeIcon`, `closeOnBackdropClick`, `initialFocus`, `onCancel`, and `onEscapeKeyDown`, and an inline dialog takes `modal: false` and accepts none of them.
 - `DiffViewProps.statusBar` is accepted only with `variant="statusbar"`; on every other variant it is now typed `never` instead of being silently ignored.
 - `DialogContent initialFocus` now wins in browsers: the shell focuses the target right after `showModal()`, before the browser's own first-focusable pick could stand.
+- `Menu` calls `preventDefault()` on Tab in addition to `onClose()`. Tab closes the menu and leaves focus where your close handler puts it — for a popover-hosted menu, the trigger, matching Escape. Press Tab twice to reach the element after the trigger.
+- An empty `type="single"` `Accordion` value normalizes to `undefined`.
+- Focus outlines move from `outline-offset-2` to `outline-offset-0` across the library so the mark hugs the control edge; `ScrollArea` draws its outline inset. Fields keep the inset field grammar (`focus:border-ring` plus `focus:ring-1`).
+- `dialog.css` drops the CSS-only `body:has(dialog[open])` scroll lock, leaving the reference-counted `useScrollLock` inside `DialogContent` as the single owner, so the page no longer jumps on open. The modal entrance duration is a literal `150ms` instead of the anchored tier's `--ui-content-enter-duration`.
+- Copy path: `stepper.css` moves out of the `stepper` and `horizontal-stepper` file lists into `stepper-variants`, which both already depend on, so installing either brings the stylesheet once; `toast` picks up a `focus-restore` dependency on `@diffgazer/keys`.
+
+### Patch changes
+
+- The marker rail reserves its lane with a side-scoped `border-l-transparent`, so `NavigationList` separators render at their variant color (`border-b-border/50`) and a consumer-passed bottom-border color no longer tints the rail into a second vertical line.
+- A `ScrollArea` overlay thumb that is turned back on while mounted (`overlay` or `orientation` changed) shows immediately instead of staying invisible until a scroll or resize, and its hover color applies reliably.
 
 ## 0.2.0
 

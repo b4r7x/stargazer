@@ -283,8 +283,8 @@ export function collectReleaseRecoveryFailures(workflowSource, governanceSource)
     failures.push(`${RELEASE_WORKFLOW_PATH}: recovery must run the release readiness gate`);
   }
   // The publish command is compared against the normal job's rather than pinned to
-  // a literal: the two must stay identical, and the command grows package names as
-  // the first-publish gate opens (PACKAGE_GOVERNANCE.md, Release Process).
+  // a literal: the two must stay identical, and the command may carry package
+  // names to select a recovery subset (PACKAGE_GOVERNANCE.md, Release Process).
   const normalPublish = (
     Array.isArray(workflow?.jobs?.release?.steps) ? workflow.jobs.release.steps : []
   ).find((candidate) => candidate?.name === "Version PR or publish")?.with?.publish;

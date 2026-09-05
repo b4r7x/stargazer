@@ -8,7 +8,7 @@ import {
 import { KeyboardProvider } from "@diffgazer/keys";
 import { Toaster, toast } from "@diffgazer/ui/components/toast";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -272,7 +272,16 @@ describe("GlobalLayout", () => {
     await user.click(screen.getByRole("button", { name: "Retry" }));
 
     await screen.findByLabelText(/server live$/);
-    expect(await screen.findByText("Reconnected")).toBeVisible();
+    // Query the toast by role, not text: the Toaster also mirrors every
+    // non-error toast into its polite live-region announcer for 1000ms, so a
+    // text query sees "Reconnected" twice until that timer lands - and RTL's
+    // findBy deadline is the same 1000ms, so under CI load the deadline ran
+    // first and reported "multiple elements". Recovery raises exactly one
+    // success toast, and it is the region's only role="status" node.
+    const notifications = screen.getByRole("region", { name: "Notifications" });
+    const reconnected = await within(notifications).findByRole("status");
+    expect(reconnected).toHaveTextContent("Reconnected");
+    expect(reconnected).toBeVisible();
     await waitFor(() =>
       expect(screen.queryByText(/server not responding/i)).not.toBeInTheDocument(),
     );

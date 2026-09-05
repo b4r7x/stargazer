@@ -16,11 +16,10 @@ const KEYS_PACKAGE_ONLY = new Set([
 ]);
 
 /**
- * Two gates. HOSTED_REGISTRY_GATED closes the shadcn tab; the registry at
- * r.b4r7.dev is live, so it is `false`. PUBLISH_GATED annotates the npm paths
- * (package install, the dgadd bin) and stays `true` while the packages stay
- * unpublished (see PACKAGE_GOVERNANCE.md, First-Publish Gate and Hosted
- * Registry Status).
+ * HOSTED_REGISTRY_GATED closes the shadcn tab; the registry at r.b4r7.dev is
+ * live, so it is `false` (see PACKAGE_GOVERNANCE.md, Hosted Registry Status).
+ * The npm paths (package install, the dgadd bin) have no gate: the packages are
+ * on npm.
  *
  * SOURCE-TEXT CONSUMER: scripts/monorepo/check-live-registry.mjs regex-matches
  * the literal `HOSTED_REGISTRY_GATED = true|false` assignment in THIS file to
@@ -32,22 +31,22 @@ const KEYS_PACKAGE_ONLY = new Set([
  */
 export const HOSTED_REGISTRY_GATED = false;
 
-const PUBLISH_GATED = true;
-
 /** Kept as a literal so the client bundle stays clear of the registry barrel; consumption-metadata.test.ts pins it to REGISTRY_ORIGIN. */
 const HOSTED_REGISTRY_ORIGIN = "https://r.b4r7.dev";
-
-const PUBLISH_GATE_NOTE =
-  "@diffgazer/ui and @diffgazer/keys are not published to npm. Pack them from the repository and install those tarballs.";
 
 const HOSTED_REGISTRY_GATE_NOTE =
   "The hosted registry at https://r.b4r7.dev is not serving yet. Copy the source from this page instead.";
 
-const LOCAL_DGADD_GATE_NOTE =
-  "@diffgazer/add is not published to npm. Pack it from the repository and install that tarball into this app, which is what puts dgadd on pnpm exec.";
+const DGADD_NOTE =
+  "dgadd ships in @diffgazer/add on npm: pnpm add -D @diffgazer/add puts it on pnpm exec, and npx @diffgazer/add runs it without the install.";
 
 const KEYS_PACKAGE_GATE_NOTE =
-  "Requires KeyboardProvider and the @diffgazer/keys package, which is not published to npm.";
+  "Requires KeyboardProvider, so it ships only in the @diffgazer/keys package.";
+
+const PACKAGE_INSTALL_COMMAND: Record<ConsumptionLibrary, string> = {
+  ui: "npm install @diffgazer/ui @diffgazer/keys",
+  keys: "npm install @diffgazer/keys",
+};
 
 function getKeysHookFileName(itemId: string): string {
   return itemId.startsWith("use-") ? itemId : `use-${itemId}`;
@@ -101,12 +100,10 @@ export function getConsumptionMetadata(
       packageImport,
       copyPath,
       dgaddName,
-      publishGated: PUBLISH_GATED,
       paths: {
         // Package-only hooks have no registry item at all, so neither the copy
         // nor the dgadd path can ever work for them. Their unavailability is the
-        // classification, not the publish gate: releasing must not turn these
-        // instructions on.
+        // classification: no install path turns these instructions on.
         copy: isKeysPackageOnly
           ? { available: false, note: KEYS_PACKAGE_GATE_NOTE }
           : getHostedRegistryPath(library, registryItemId),
@@ -115,12 +112,9 @@ export function getConsumptionMetadata(
           : {
               available: true,
               command: getInstallCommand(library, dgaddName) ?? undefined,
-              note: PUBLISH_GATED ? LOCAL_DGADD_GATE_NOTE : undefined,
+              note: DGADD_NOTE,
             },
-        package: {
-          available: !PUBLISH_GATED,
-          note: PUBLISH_GATED ? PUBLISH_GATE_NOTE : undefined,
-        },
+        package: { available: true, command: PACKAGE_INSTALL_COMMAND[library] },
       },
     };
   }
@@ -136,18 +130,14 @@ export function getConsumptionMetadata(
     packageImport,
     copyPath: getUiCopyPath(itemId, itemKind),
     dgaddName,
-    publishGated: PUBLISH_GATED,
     paths: {
       copy: getHostedRegistryPath(library, itemId),
       dgadd: {
         available: true,
         command: getInstallCommand(library, dgaddName) ?? undefined,
-        note: PUBLISH_GATED ? LOCAL_DGADD_GATE_NOTE : undefined,
+        note: DGADD_NOTE,
       },
-      package: {
-        available: !PUBLISH_GATED,
-        note: PUBLISH_GATED ? PUBLISH_GATE_NOTE : undefined,
-      },
+      package: { available: true, command: PACKAGE_INSTALL_COMMAND[library] },
     },
     cssNote:
       "UI components require Tailwind CSS v4. Local copy mode imports src/styles/styles.css; package mode uses @diffgazer/ui CSS from the installed package.",

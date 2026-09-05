@@ -4,7 +4,7 @@ Composable, scoped keyboard navigation hooks for React `>=19.2.0`.
 
 ## Consumption Paths Summary
 
-> **npm packages:** `@diffgazer/add`, `@diffgazer/ui`, and `@diffgazer/keys` are publish-gated and not on npm. Pack the workspace packages from this repository and install those tarballs in the target app — see the canonical [Copy-first mode (`dgadd`)](https://github.com/b4r7x/diffgazer/blob/main/README.md#copy-first-mode-dgadd) and [local runtime package](https://github.com/b4r7x/diffgazer/blob/main/PACKAGE_GOVERNANCE.md#local-runtime-package-installation-from-tarballs) procedures. The target-app install is what puts `dgadd` on `pnpm exec` and makes `@diffgazer/keys` resolve.
+> **npm packages:** `@diffgazer/add`, `@diffgazer/ui`, and `@diffgazer/keys` are on npm. `npm install @diffgazer/keys` is the package path; `pnpm add -D @diffgazer/add` puts `dgadd` on `pnpm exec` for the copy path — see the canonical [Consumption Paths](https://github.com/b4r7x/diffgazer/blob/main/README.md#consumption-paths) section.
 
 `@diffgazer/keys` requires no CSS or Tailwind setup.
 
@@ -20,11 +20,11 @@ Provider-backed APIs (`KeyboardProvider`, `useKey`, `useScope`, `useScopedNaviga
 
 ## Install
 
-`@diffgazer/keys` is not on npm; install the tarball from the [local runtime package](https://github.com/b4r7x/diffgazer/blob/main/PACKAGE_GOVERNANCE.md#local-runtime-package-installation-from-tarballs) procedure. If the package is published (`npm view @diffgazer/keys version` succeeds), the install is:
-
 ```bash
 npm install @diffgazer/keys
 ```
+
+Standalone hooks also copy without the package: `pnpm exec dgadd add keys/navigation` or `npx shadcn add https://r.b4r7.dev/r/keys/navigation.json`.
 
 ## Dependency Policy
 

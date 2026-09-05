@@ -22,7 +22,7 @@ export const accordionDoc: ComponentDoc = {
     {
       title: "Requires @diffgazer/keys (package mode)",
       content:
-        "Accordion's arrow-key trigger navigation imports from the required @diffgazer/keys peer. Package consumers must install @diffgazer/keys with @diffgazer/ui; the packages are not on npm, so install both from packed tarballs, or take the component from the live registry instead (npx shadcn add https://r.b4r7.dev/r/ui/accordion.json). Importing @diffgazer/ui/components/accordion without keys fails at module load with an error naming the missing @diffgazer/keys package. Copy/dgadd consumers do not need the package — copy mode rewrites the keyboard helpers to local source.",
+        "Accordion's arrow-key trigger navigation imports from the required @diffgazer/keys peer. Package consumers must install @diffgazer/keys with @diffgazer/ui; install both from npm (npm install @diffgazer/ui @diffgazer/keys), or take the component from the live registry instead (npx shadcn add https://r.b4r7.dev/r/ui/accordion.json). Importing @diffgazer/ui/components/accordion without keys fails at module load with an error naming the missing @diffgazer/keys package. Copy/dgadd consumers do not need the package — copy mode rewrites the keyboard helpers to local source.",
     },
     {
       title: "Single vs Multiple",

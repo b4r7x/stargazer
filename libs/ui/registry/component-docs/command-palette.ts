@@ -7,7 +7,7 @@ export const commandPaletteDoc: ComponentDoc = {
     {
       title: "Requires @diffgazer/keys (package mode)",
       content:
-        "CommandPalette's arrow-key navigation and focus restoration import from the required @diffgazer/keys peer. Package consumers must install @diffgazer/keys with @diffgazer/ui; the packages are not on npm, so install both from packed tarballs, or take the component from the live registry instead (npx shadcn add https://r.b4r7.dev/r/ui/command-palette.json). Importing @diffgazer/ui/components/command-palette without keys fails at module load with an error naming the missing @diffgazer/keys package. Copy/dgadd consumers do not need the package — copy mode rewrites the keyboard hooks to local source.",
+        "CommandPalette's arrow-key navigation and focus restoration import from the required @diffgazer/keys peer. Package consumers must install @diffgazer/keys with @diffgazer/ui; install both from npm (npm install @diffgazer/ui @diffgazer/keys), or take the component from the live registry instead (npx shadcn add https://r.b4r7.dev/r/ui/command-palette.json). Importing @diffgazer/ui/components/command-palette without keys fails at module load with an error naming the missing @diffgazer/keys package. Copy/dgadd consumers do not need the package — copy mode rewrites the keyboard hooks to local source.",
     },
     {
       title: "Controlled Open State",

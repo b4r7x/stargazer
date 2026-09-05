@@ -24,9 +24,9 @@ It is not abandoned. If issues or pull requests come in, I read them, answer que
 
 What that means in practice:
 
-- `diffgazer` on npm gets one release with what is already merged here, then bug-fix releases when something needs fixing, not new features.
+- `diffgazer` on npm gets bug-fix releases when something needs fixing, not new features.
 - The terminal UI (`--tui`) ships as a beta and stays one. Web mode is the finished path.
-- `@diffgazer/ui` and `@diffgazer/keys` install from the hosted registry at https://r.b4r7.dev. The npm packages, and `@diffgazer/add`, are not published, and I have no date for that.
+- `@diffgazer/ui` and `@diffgazer/keys` install from npm or from the hosted registry at https://r.b4r7.dev, and `@diffgazer/add` is on npm. Same deal as the CLI: bug-fix releases, no new features.
 
 ## Features
 
@@ -108,7 +108,7 @@ This repository is one workspace with a single root install and lockfile.
 
 ## Consumption Paths
 
-`@diffgazer/ui`, `@diffgazer/keys`, and `@diffgazer/add` are publish-gated: public npm commands for these packages are valid only after `npm view` returns versions. Publish status is per package; see [PACKAGE_GOVERNANCE.md](./PACKAGE_GOVERNANCE.md) for the current matrix. Local tarballs are the package-mode install path while they stay unpublished.
+`@diffgazer/ui`, `@diffgazer/keys`, and `@diffgazer/add` are on npm; `npm view @diffgazer/ui version` and the two siblings return versions. The release contract is in [PACKAGE_GOVERNANCE.md](./PACKAGE_GOVERNANCE.md).
 
 | Path | @diffgazer/ui | @diffgazer/keys |
 |------|---------------|-----------------|
@@ -118,25 +118,17 @@ This repository is one workspace with a single root install and lockfile.
 
 ### Copy-first mode (`dgadd`)
 
-`dgadd` is publish-gated, so there is no `dgadd` bin at the workspace root. Pack the CLI and install the tarball into the target app, which is what puts `dgadd` on `pnpm exec`.
-
-From this repository:
+`dgadd` is the binary of `@diffgazer/add` on npm. Install it as a dev dependency of the target app, which puts `dgadd` on `pnpm exec`:
 
 ```bash
-pnpm --filter @diffgazer/registry build
-pnpm --filter @diffgazer/add build
-pnpm --filter @diffgazer/add pack --pack-destination /tmp/diffgazer-packs
-```
-
-From the target app:
-
-```bash
-pnpm add -D /tmp/diffgazer-packs/diffgazer-add-*.tgz
+pnpm add -D @diffgazer/add
 pnpm exec dgadd init
 pnpm exec dgadd add ui/button keys/navigation
 ```
 
-Copy mode installs source files the consuming app owns. UI components require Tailwind CSS v4 and the copied `src/styles/styles.css`. Keys standalone hooks require no CSS setup. If `@diffgazer/add` is ever published, `npx @diffgazer/add` replaces the local tarball. `dgadd init` also supports the recovery-only `--reset-manifest` option, and `-s, --silent` is available globally to suppress non-error output. See [cli/add/README.md](./cli/add/README.md#install-from-a-packed-tarball) for the full command reference.
+`npx @diffgazer/add init` and `npx @diffgazer/add add ui/button keys/navigation` do the same without the dev dependency.
+
+Copy mode installs source files the consuming app owns. UI components require Tailwind CSS v4 and the copied `src/styles/styles.css`. Keys standalone hooks require no CSS setup. `dgadd init` also supports the recovery-only `--reset-manifest` option, and `-s, --silent` is available globally to suppress non-error output. See [cli/add/README.md](./cli/add/README.md#install) for the full command reference.
 
 ### Runtime package mode
 
@@ -155,7 +147,7 @@ npx shadcn add https://r.b4r7.dev/r/ui/button.json
 npx shadcn add https://r.b4r7.dev/r/keys/navigation.json
 ```
 
-Installing from the hosted registry needs no checkout of this repository: while the npm packages stay unpublished, `dgadd` (`pnpm exec dgadd add ui/button keys/navigation`, see [Copy-first mode](#copy-first-mode-dgadd)) and the runtime packages still come from locally packed tarballs.
+Installing from the hosted registry needs neither a checkout of this repository nor an npm package. `dgadd` (`pnpm exec dgadd add ui/button keys/navigation`, see [Copy-first mode](#copy-first-mode-dgadd)) and the runtime packages come from npm.
 
 Versioning, release gates, migration expectations, and artifact ownership are documented in [PACKAGE_GOVERNANCE.md](./PACKAGE_GOVERNANCE.md).
 

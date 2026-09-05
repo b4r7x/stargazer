@@ -5,7 +5,7 @@ description: Install `@diffgazer/ui`, wire up your app, and configure the theme.
 
 `@diffgazer/ui` components install as source. You own the files; `dgadd` copies them in and tracks updates. Work through the four steps below.
 
-> **npm packages:** `@diffgazer/add`, `@diffgazer/ui`, and `@diffgazer/keys` are publish-gated and not on npm, so there is no `dgadd` bin until you install one. Follow the [Copy-first mode procedure](https://github.com/b4r7x/diffgazer#copy-first-mode-dgadd) to build and pack `@diffgazer/add` from a checkout, then install that tarball in the target app; that install is what puts `dgadd` on `pnpm exec`. Components also install without a checkout from the hosted registry: `npx shadcn add https://r.b4r7.dev/r/ui/<item>.json`.
+> **npm packages:** `@diffgazer/add` is on npm. `pnpm add -D @diffgazer/add` puts `dgadd` on `pnpm exec`, and `npx @diffgazer/add <command>` runs it without the install. Components also install without `dgadd` from the hosted registry: `npx shadcn add https://r.b4r7.dev/r/ui/<item>.json`.
 
 <Steps>
 
@@ -47,7 +47,7 @@ pnpm exec dgadd init
 pnpm exec dgadd add ui/button
 ```
 
-[Installation](/ui/getting-started/installation) covers the publish gate, local validation, required app wiring, and keyboard hooks.
+[Installation](/ui/getting-started/installation) covers installing `dgadd`, the Tailwind and alias setup, what `init` writes, keyboard hook integration modes, the one-shot package-manager commands, and the resulting file layout.
 
 </Step>
 

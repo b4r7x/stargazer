@@ -49,7 +49,7 @@ describe("docs-library source path mapping", () => {
     expect(routeSlugsFromSourcePath("keys", "/docs/ui/components/button")).toBeNull();
   });
 
-  it("generates local install commands while packages are unpublished", () => {
+  it("generates dgadd install commands for namespaced items", () => {
     expect(getInstallCommand("ui", "button")).toBe("pnpm exec dgadd add ui/button");
     expect(getInstallCommand("ui", "ui/button")).toBe("pnpm exec dgadd add ui/button");
     expect(getInstallCommand("keys", "navigation")).toBe("pnpm exec dgadd add keys/navigation");

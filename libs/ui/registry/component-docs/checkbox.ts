@@ -24,7 +24,7 @@ export const checkboxDoc: ComponentDoc = {
     {
       title: "Requires @diffgazer/keys (package mode)",
       content:
-        "CheckboxGroup's arrow-key navigation imports from the required @diffgazer/keys peer. Package consumers must install @diffgazer/keys with @diffgazer/ui; the packages are not on npm, so install both from packed tarballs, or take the component from the live registry instead (npx shadcn add https://r.b4r7.dev/r/ui/checkbox.json). Importing @diffgazer/ui/components/checkbox without keys fails at module load with an error naming the missing @diffgazer/keys package. Standalone Checkbox still needs it because the subpath bundles the group. Copy/dgadd consumers do not need the package — copy mode rewrites the keyboard hooks to local source.",
+        "CheckboxGroup's arrow-key navigation imports from the required @diffgazer/keys peer. Package consumers must install @diffgazer/keys with @diffgazer/ui; install both from npm (npm install @diffgazer/ui @diffgazer/keys), or take the component from the live registry instead (npx shadcn add https://r.b4r7.dev/r/ui/checkbox.json). Importing @diffgazer/ui/components/checkbox without keys fails at module load with an error naming the missing @diffgazer/keys package. Standalone Checkbox still needs it because the subpath bundles the group. Copy/dgadd consumers do not need the package — copy mode rewrites the keyboard hooks to local source.",
     },
     {
       title: "Indeterminate State",

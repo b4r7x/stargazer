@@ -4,7 +4,7 @@ Reusable React UI components for Diffgazer and compatible product surfaces.
 
 ## Consumption Paths
 
-> **npm packages:** `@diffgazer/add`, `@diffgazer/ui`, and `@diffgazer/keys` are not published to npm. While they stay unpublished, pack the workspace packages from this repository and install those tarballs in the target app — see the canonical [Copy-first mode (`dgadd`)](https://github.com/b4r7x/diffgazer/blob/main/README.md#copy-first-mode-dgadd) and [local runtime package](https://github.com/b4r7x/diffgazer/blob/main/PACKAGE_GOVERNANCE.md#local-runtime-package-installation-from-tarballs) procedures. The target-app install is what puts `dgadd` on `pnpm exec` and makes `@diffgazer/ui` resolve.
+> **npm packages:** `@diffgazer/add`, `@diffgazer/ui`, and `@diffgazer/keys` are on npm. `pnpm add -D @diffgazer/add` puts `dgadd` on `pnpm exec`; `npm install @diffgazer/ui @diffgazer/keys` is the runtime package path. The hosted registry at `https://r.b4r7.dev` is the other supported install path — see the canonical [Consumption Paths](https://github.com/b4r7x/diffgazer/blob/main/README.md#consumption-paths) section.
 
 Choose the path that matches whether your app should own copied source or consume versioned packages.
 
@@ -12,17 +12,16 @@ Choose the path that matches whether your app should own copied source or consum
 |------|-------------|-----------|
 | Manual copy / shadcn | `npx shadcn add https://r.b4r7.dev/r/ui/button.json` | Import copied project-root `styles/styles.css` |
 | `dgadd` CLI | `pnpm exec dgadd add ui/button` | Import copied `src/styles/styles.css` |
-| Runtime npm package (local tarball) | Install locally packed `@diffgazer/ui` and `@diffgazer/keys` tarballs | Import `@diffgazer/ui/sources.css` and `@diffgazer/ui/styles.css` |
+| Runtime npm package | `npm install @diffgazer/ui @diffgazer/keys` | Import `@diffgazer/ui/sources.css` and `@diffgazer/ui/styles.css` |
 
 ### Copy-first registry mode
 
 Use this when your app should own and customize component source.
 
-`dgadd` is publish-gated, so there is no `dgadd` bin at the workspace root. Pack the CLI and install the tarball into the target app, which is what puts `dgadd` on `pnpm exec`. See the root [Copy-first mode (`dgadd`)](https://github.com/b4r7x/diffgazer/blob/main/README.md#copy-first-mode-dgadd) section for the full build, pack, and install procedure.
-
-From the target app after installing the packed `@diffgazer/add` tarball:
+`dgadd` is the binary of `@diffgazer/add` on npm. Install it as a dev dependency of the target app, which puts `dgadd` on `pnpm exec` (`npx @diffgazer/add` runs it without the install; see the root [Copy-first mode (`dgadd`)](https://github.com/b4r7x/diffgazer/blob/main/README.md#copy-first-mode-dgadd) section):
 
 ```bash
+pnpm add -D @diffgazer/add
 pnpm exec dgadd init
 pnpm exec dgadd add ui/button
 ```
@@ -37,11 +36,15 @@ Copied components expect:
 
 For keyboard behavior, `pnpm exec dgadd add ui/menu --integration copy` copies standalone hooks. `pnpm exec dgadd add ui/menu --integration keys` rewrites imports to `@diffgazer/keys` and installs that runtime package.
 
-### Runtime package mode from local tarballs
+### Runtime package mode
 
 Use this when you want versioned package imports and do not need to customize source:
 
-Follow the canonical [local build, pack, and tarball installation procedure](https://github.com/b4r7x/diffgazer/blob/main/PACKAGE_GOVERNANCE.md#local-runtime-package-installation-from-tarballs). Public npm-registry installation examples stay gated until `npm view @diffgazer/ui version` and `npm view @diffgazer/keys version` both succeed.
+```bash
+npm install @diffgazer/ui @diffgazer/keys
+```
+
+`@diffgazer/keys` is a required peer in this mode.
 
 Configure Tailwind CSS v4 from the CSS file that imports Tailwind:
 
@@ -69,8 +72,7 @@ The hosted registry at `https://r.b4r7.dev` is live (see [Hosted Registry Status
 npx shadcn add https://r.b4r7.dev/r/ui/button.json
 ```
 
-Installing from the hosted registry needs no checkout of the repository: while the npm packages stay unpublished, `dgadd` (see [Copy-first mode (`dgadd`)](https://github.com/b4r7x/diffgazer/blob/main/README.md#copy-first-mode-dgadd)) and the runtime packages still come from locally packed tarballs (see the
-[local runtime package procedure](https://github.com/b4r7x/diffgazer/blob/main/PACKAGE_GOVERNANCE.md#local-runtime-package-installation-from-tarballs)).
+Installing from the hosted registry needs neither a checkout of the repository nor an npm package; `dgadd` (see [Copy-first mode (`dgadd`)](https://github.com/b4r7x/diffgazer/blob/main/README.md#copy-first-mode-dgadd)) and the runtime packages come from npm.
 
 For a dependency-closed local archive, open the Button docs page, choose **Copy Full Source**,
 save the copied registry-item JSON as `button.registry.json`, and run:

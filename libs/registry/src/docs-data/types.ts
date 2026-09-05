@@ -147,7 +147,6 @@ export interface ConsumptionMetadata {
   packageImport?: string;
   copyPath?: string;
   dgaddName: string;
-  publishGated: boolean;
   paths: {
     copy: ConsumptionPathOption;
     dgadd: ConsumptionPathOption;

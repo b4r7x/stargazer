@@ -7,11 +7,9 @@ import { errorMessage } from "./lib/error-message.mjs";
 import { isPackageManifestPath, listRepoFiles } from "./lib/files.mjs";
 import { readJson } from "./lib/json.mjs";
 
-// First-publish allowlist. `diffgazer` is live on npm; the scoped packages
-// (@diffgazer/ui, @diffgazer/keys, @diffgazer/add) first-publish in the upcoming
-// release. Every release-managed package is listed, so the gate now refuses only
-// a never-published name outside this set (PACKAGE_GOVERNANCE.md, First-publish
-// gate).
+// First-publish allowlist. All four release-managed packages are on npm and
+// every one is listed, so the gate refuses only a never-published name outside
+// this set (PACKAGE_GOVERNANCE.md, First-publish gate).
 const FIRST_PUBLISH_ALLOWLIST = ["diffgazer", "@diffgazer/add", "@diffgazer/ui", "@diffgazer/keys"];
 
 export function isPublicPackage(parsed) {
