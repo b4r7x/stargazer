@@ -1,5 +1,12 @@
 # @diffgazer/add
 
+## 0.2.1
+
+### Patch Changes
+
+- 9b81076: Republish with npm provenance: 0.2.0 was uploaded by a cancelled Release run before the workflow
+  passed `--provenance`.
+
 ## 0.2.0
 
 ### Minor Changes
