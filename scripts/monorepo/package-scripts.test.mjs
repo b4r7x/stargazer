@@ -204,7 +204,14 @@ test("Knip treats configuration hints as errors in both direct and root-script r
   assert.match(knipConfigSource, /["']treatConfigHintsAsErrors["']\s*:\s*true/);
 });
 
-const VERSION_PACKAGES_TRACKED_BUILD_OUTPUTS = ["pnpm --filter diffgazer build:notices"];
+// Tracked files that carry a version-derived value: THIRD_PARTY_NOTICES and the
+// `dgadd init` example in cli/add/README.md, which readme.test.ts pins to the
+// manifest. Both are rewritten in the Version PR itself so its CI is green by
+// construction.
+const VERSION_PACKAGES_TRACKED_BUILD_OUTPUTS = [
+  "node scripts/monorepo/sync-add-readme-version.mjs",
+  "pnpm --filter diffgazer build:notices",
+];
 
 test("version-packages regenerates tracked diffgazer build outputs", () => {
   const segments = scriptSegments(rootPackageJson.scripts["version-packages"]);

@@ -7,6 +7,15 @@ import { errorMessage } from "./lib/error-message.mjs";
 import { isPackageManifestPath, listRepoFiles } from "./lib/files.mjs";
 import { readJson } from "./lib/json.mjs";
 
+// The publish set is decided by artifact state, not by the checked-out commit:
+// every public package whose manifest version is absent from npm is published,
+// and every published version without a `<name>@<version>` tag is announced.
+// Deriving the set from what HEAD^..HEAD versioned tied publication to the
+// Version PR commit's own CI run, which can fail for reasons a later commit
+// fixes (a README pin, a flaky suite) — after which no commit ever "versioned"
+// the stranded packages again. This rule is `changeset publish`'s, and it makes
+// every green push to main and every retry idempotent.
+//
 // First-publish allowlist. All four release-managed packages are on npm and
 // every one is listed, so the gate refuses only a never-published name outside
 // this set (PACKAGE_GOVERNANCE.md, First-publish gate).
@@ -27,39 +36,6 @@ function listPublicPackages() {
     packages.push({ name: parsed.name, version: parsed.version, file });
   }
   return packages;
-}
-
-function getPreviousVersionsByFile(packages) {
-  try {
-    execFileSync("git", ["rev-parse", "--verify", "HEAD^"], {
-      stdio: ["ignore", "ignore", "pipe"],
-    });
-  } catch (error) {
-    const stderr = String(error.stderr ?? "");
-    throw new Error(
-      `Publish guard: cannot inspect the commit before HEAD. Fetch the repository history before publishing.\n${stderr}`,
-    );
-  }
-
-  const previousVersions = new Map();
-  for (const pkg of packages) {
-    const previousPath = execFileSync("git", ["ls-tree", "--name-only", "HEAD^", "--", pkg.file], {
-      encoding: "utf8",
-    }).trim();
-    if (previousPath.length === 0) continue;
-
-    const previousManifest = JSON.parse(
-      execFileSync("git", ["show", `HEAD^:${pkg.file}`], { encoding: "utf8" }),
-    );
-    previousVersions.set(pkg.file, previousManifest.version);
-  }
-  return previousVersions;
-}
-
-export function findVersionChangedPackageNames({ packages, previousVersionsByFile }) {
-  return packages
-    .filter((pkg) => previousVersionsByFile.get(pkg.file) !== pkg.version)
-    .map((pkg) => pkg.name);
 }
 
 function getPublishedVersions(name) {
@@ -94,29 +70,34 @@ function versionsFor(publishedVersionsByName, name) {
   return publishedVersionsByName.get(name) ?? [];
 }
 
-function ensureReleaseTag(name, version) {
-  const tag = `${name}@${version}`;
-  try {
-    execFileSync("git", ["rev-parse", "--verify", `refs/tags/${tag}`], {
-      stdio: ["ignore", "ignore", "ignore"],
-    });
-    return;
-  } catch {
-    // Annotated tag at checkout HEAD; changesets/action pushes it via git after publish.
-  }
-  execFileSync("git", ["tag", "-a", tag, "-m", tag], { stdio: "inherit" });
+function releaseTag(pkg) {
+  return `${pkg.name}@${pkg.version}`;
 }
 
-export function createPublishPlan({ packages, publishedVersionsByName, allowlist, pendingNames }) {
+// The release checkout fetches every tag (fetch-depth: 0), so the local tag
+// list mirrors origin at checkout time.
+function listReleaseTags() {
+  return new Set(
+    execFileSync("git", ["tag", "--list"], { encoding: "utf8" }).split("\n").filter(Boolean),
+  );
+}
+
+export function createPublishPlan({
+  packages,
+  publishedVersionsByName,
+  allowlist,
+  candidateNames,
+  releaseTags,
+}) {
   const allowed = new Set(allowlist);
   const packagesByName = new Map(packages.map((pkg) => [pkg.name, pkg]));
-  const pending = new Set(pendingNames);
-  const unknown = [...pending].filter((name) => !packagesByName.has(name));
+  const requested = new Set(candidateNames);
+  const unknown = [...requested].filter((name) => !packagesByName.has(name));
   if (unknown.length > 0) {
     throw new Error(`Publish guard: unknown public package(s): ${unknown.join(", ")}`);
   }
 
-  const candidates = packages.filter((pkg) => pending.has(pkg.name));
+  const candidates = packages.filter((pkg) => requested.has(pkg.name));
   const gated = candidates.filter(
     (pkg) => versionsFor(publishedVersionsByName, pkg.name).length === 0 && !allowed.has(pkg.name),
   );
@@ -133,26 +114,31 @@ export function createPublishPlan({ packages, publishedVersionsByName, allowlist
     );
   }
 
-  return candidates.map((pkg) => ({
-    ...pkg,
-    publication: versionsFor(publishedVersionsByName, pkg.name).includes(pkg.version)
-      ? "recover"
-      : "publish",
-  }));
+  // `New tag:` is what changesets/action turns into a pushed Git tag and a
+  // GitHub Release, so a version already live on npm is announced only while
+  // its tag is missing — the retry of a partially failed run, or a later commit
+  // finishing what the version commit's red CI left behind. Re-announcing a
+  // tagged version would ask GitHub for a release that already exists.
+  return candidates.flatMap((pkg) => {
+    const published = versionsFor(publishedVersionsByName, pkg.name).includes(pkg.version);
+    if (published && releaseTags.has(releaseTag(pkg))) return [];
+    return [{ ...pkg, publication: published ? "tag" : "publish" }];
+  });
 }
 
 export function publishPendingPackages({
   packages,
   publishedVersionsByName,
   allowlist = FIRST_PUBLISH_ALLOWLIST,
-  pendingNames,
-  versionedNames = pendingNames,
+  candidateNames,
 }) {
+  const releaseTags = listReleaseTags();
   const plan = createPublishPlan({
     packages,
     publishedVersionsByName,
     allowlist,
-    pendingNames,
+    candidateNames,
+    releaseTags,
   });
 
   if (plan.length === 0) {
@@ -161,25 +147,21 @@ export function publishPendingPackages({
   }
 
   for (const pkg of plan) {
-    if (pkg.publication === "recover") continue;
+    if (pkg.publication === "tag") continue;
     execFileSync("pnpm", ["--filter", pkg.name, "publish", "--no-git-checks"], {
       stdio: "inherit",
     });
   }
 
-  // `New tag:` is what changesets/action turns into a pushed Git tag and a
-  // GitHub Release, so a version already live on npm may only be announced when
-  // the checked-out commit versioned it — the retry of a failed publish run for
-  // the same Version-PR commit. A package named explicitly on a commit that did
-  // not version it is skipped here; re-announcing its live version would ask
-  // GitHub to create a release that already exists.
-  const versioned = new Set(versionedNames);
-  const released = plan.filter((pkg) => pkg.publication === "publish" || versioned.has(pkg.name));
-  for (const pkg of released) {
-    ensureReleaseTag(pkg.name, pkg.version);
-    console.log(`New tag: ${pkg.name}@${pkg.version}`);
+  // Annotated tag at checkout HEAD; changesets/action pushes it via git after publish.
+  for (const pkg of plan) {
+    const tag = releaseTag(pkg);
+    if (!releaseTags.has(tag)) {
+      execFileSync("git", ["tag", "-a", tag, "-m", tag], { stdio: "inherit" });
+    }
+    console.log(`New tag: ${tag}`);
   }
-  return released.map((pkg) => pkg.name);
+  return plan.map((pkg) => pkg.name);
 }
 
 export function main({
@@ -187,15 +169,12 @@ export function main({
   requestedNames = process.argv.slice(2),
 } = {}) {
   const packages = listPublicPackages();
-  const versionedNames = findVersionChangedPackageNames({
-    packages,
-    previousVersionsByFile: getPreviousVersionsByFile(packages),
-  });
-  const pendingNames = requestedNames.length > 0 ? requestedNames : versionedNames;
-  const pending = new Set(pendingNames);
+  const candidateNames =
+    requestedNames.length > 0 ? requestedNames : packages.map((pkg) => pkg.name);
+  const candidates = new Set(candidateNames);
   const publishedVersionsByName = new Map(
     packages
-      .filter((pkg) => pending.has(pkg.name))
+      .filter((pkg) => candidates.has(pkg.name))
       .map((pkg) => [pkg.name, getPublishedVersions(pkg.name)]),
   );
 
@@ -203,8 +182,7 @@ export function main({
     packages,
     publishedVersionsByName,
     allowlist,
-    pendingNames,
-    versionedNames,
+    candidateNames,
   });
 }
 

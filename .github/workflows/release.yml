@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       release_sha:
-        description: Full merged-main commit SHA of the Version PR to recover
+        description: Full merged-main commit SHA to publish from (normally the current main tip)
         required: true
         type: string
 
@@ -76,16 +76,19 @@ jobs:
 
       # GitHub raises no workflow-triggering event for anything `GITHUB_TOKEN`
       # creates, so the `chore: version packages` PR this opens receives zero
-      # CI checks of its own. Its content is verified by the
-      # successful push-to-main run after it merges; manual recovery verifies an
-      # exact merged-main SHA (PACKAGE_GOVERNANCE.md, Publish Flow). No App or
-      # PAT is used for this intentional post-merge verification model.
+      # CI checks of its own. Its content is verified by the successful
+      # push-to-main run after it merges — and if that run is red, by the next
+      # green one: the publish set below is derived from npm, not from the
+      # commit (PACKAGE_GOVERNANCE.md, Publish Flow). No App or PAT is used for
+      # this intentional post-merge verification model.
       - name: Version PR or publish
         uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1.8.0
         with:
-          # A bare `pnpm run release` publishes the pending set the Version PR
-          # versioned; guard-publish.mjs still refuses a never-published name that
-          # is not on its allowlist (PACKAGE_GOVERNANCE.md, Release Process).
+          # A bare `pnpm run release` publishes every release-managed package
+          # whose manifest version is absent from npm and announces every
+          # published version still missing its tag; guard-publish.mjs still
+          # refuses a never-published name that is not on its allowlist
+          # (PACKAGE_GOVERNANCE.md, Release Process).
           publish: pnpm run release
           version: pnpm run version-packages
           commit: "chore: version packages"
@@ -165,9 +168,11 @@ jobs:
       # verified. The primary job gets that proof from its `workflow_run` trigger
       # (CI, push, main, success). Recovery has no trigger edge, so
       # it asks the API for the same evidence: every required CI job green
-      # for this exact SHA. `release-check` below is defence in depth, not a
-      # substitute — it omits the event-range Gitleaks scan and the dirty-tree
-      # guard.
+      # for this exact SHA. What gets published is decided by npm, not by the
+      # SHA, so the SHA only picks the tree the tarballs are packed from —
+      # choose the newest green main commit. `release-check` below is defence
+      # in depth, not a substitute — it omits the event-range Gitleaks scan and
+      # the dirty-tree guard.
       - name: Require CI success for recovery SHA
         env:
           GH_TOKEN: ${{ github.token }}
@@ -238,7 +243,7 @@ jobs:
       - name: Recover version metadata or publish
         uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1.8.0
         with:
-          # Same pending-set publish as the primary job above.
+          # Same npm-derived publish as the primary job above.
           publish: pnpm run release
           version: pnpm run version-packages
           commit: "chore: version packages"

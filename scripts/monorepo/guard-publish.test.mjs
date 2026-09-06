@@ -13,11 +13,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, test } from "node:test";
 import { pathToFileURL } from "node:url";
-import {
-  createPublishPlan,
-  findVersionChangedPackageNames,
-  isPublicPackage,
-} from "./guard-publish.mjs";
+import { createPublishPlan, isPublicPackage } from "./guard-publish.mjs";
 
 const packageFixtures = [
   { name: "diffgazer", version: "0.1.4", file: "cli/diffgazer/package.json" },
@@ -41,8 +37,9 @@ afterEach(() => {
 
 function runPublisherChild({
   allowlist,
-  pendingNames,
+  candidateNames,
   registryVersions = publishedVersionsByName,
+  existingTags = [],
   pnpmExitCodes = [0],
 }) {
   const directory = mkdtempSync(path.join(tmpdir(), "diffgazer-publish-guard-"));
@@ -53,6 +50,9 @@ function runPublisherChild({
   runGit(directory, ["config", "user.name", "Fixture"]);
   runGit(directory, ["add", "."]);
   runGit(directory, ["commit", "--quiet", "-m", "init"]);
+  for (const tag of existingTags) {
+    runGit(directory, ["tag", tag]);
+  }
   const binDirectory = path.join(directory, "bin");
   const logFile = path.join(directory, "publish.log");
   const fakePnpm = path.join(binDirectory, "pnpm");
@@ -77,7 +77,7 @@ process.exit(exitCodes[previousInvocations] ?? 0);
     packages: packageFixtures,
     publishedVersions: registryVersions,
     allowlist,
-    pendingNames,
+    candidateNames,
   };
   const child = spawnSync(
     process.execPath,
@@ -135,10 +135,14 @@ function writePackage(directory, file, name, version, isPrivate = false) {
   writeFileSync(packageFile, `${JSON.stringify({ name, version, private: isPrivate })}\n`);
 }
 
+// Two commits: the Version PR commit that bumps `versions`, then a later commit
+// that touches no manifest — the ordinary push to main the guard runs on when
+// the version commit's own CI never went green.
 function createMainFixture({
   versions,
   registryVersions = publishedVersionsByName,
   extraManifests = [],
+  existingTags = [],
 }) {
   const directory = mkdtempSync(path.join(tmpdir(), "diffgazer-publish-main-"));
   temporaryDirectories.push(directory);
@@ -154,27 +158,29 @@ function createMainFixture({
     ...extraManifests,
   ];
   writePackage(directory, "package.json", "fixture", "0.0.0", true);
-  for (const [file, name, version] of manifests) {
-    writePackage(directory, file, name, version);
+  for (const [file, name, previousVersion] of manifests) {
+    writePackage(directory, file, name, versions[name] ?? previousVersion);
   }
   runGit(directory, ["init", "--quiet"]);
   runGit(directory, ["config", "user.email", "fixture@example.test"]);
   runGit(directory, ["config", "user.name", "Fixture"]);
   runGit(directory, ["add", "."]);
-  runGit(directory, ["commit", "--quiet", "-m", "baseline"]);
-
-  for (const [file, name, previousVersion] of manifests) {
-    writePackage(directory, file, name, versions[name] ?? previousVersion);
-  }
-  // Always change a non-manifest file so a fixture can model a commit that
-  // versions nothing — the ordinary changeset-free push to main.
-  writeFileSync(path.join(directory, "README.md"), "commit\n");
-  runGit(directory, ["add", "."]);
   runGit(directory, ["commit", "--quiet", "-m", "version packages"]);
+  for (const tag of existingTags) {
+    runGit(directory, ["tag", tag]);
+  }
+
+  writeFileSync(path.join(directory, "README.md"), "fix the readme pin\n");
+  runGit(directory, ["add", "."]);
+  runGit(directory, ["commit", "--quiet", "-m", "later green commit"]);
 
   writeExecutable(
     path.join(binDirectory, "npm"),
-    `const versions = JSON.parse(process.env.REGISTRY_VERSIONS);
+    `if (process.env.REGISTRY_ERROR) {
+  console.error(process.env.REGISTRY_ERROR);
+  process.exit(1);
+}
+const versions = JSON.parse(process.env.REGISTRY_VERSIONS);
 const name = process.argv[3];
 if (!(name in versions)) {
   console.error("E404 404 Not Found");
@@ -241,13 +247,20 @@ main({ allowlist: ${JSON.stringify(allowlist)}, requestedNames: [] });`,
   return { child, invocations: readInvocations(publishLog) };
 }
 
-function runDirectScriptChild({ requestedNames, versions, registryVersions, extraManifests }) {
+function runDirectScriptChild({
+  requestedNames,
+  versions,
+  registryVersions,
+  registryError,
+  extraManifests,
+  existingTags,
+}) {
   const {
     directory,
     binDirectory,
     publishLog,
     registryVersions: filteredRegistryVersions,
-  } = createMainFixture({ versions, registryVersions, extraManifests });
+  } = createMainFixture({ versions, registryVersions, extraManifests, existingTags });
 
   const child = spawnSync(
     process.execPath,
@@ -260,53 +273,59 @@ function runDirectScriptChild({ requestedNames, versions, registryVersions, extr
         PATH: `${binDirectory}${path.delimiter}${process.env.PATH ?? ""}`,
         PUBLISH_LOG: publishLog,
         REGISTRY_VERSIONS: JSON.stringify(filteredRegistryVersions),
+        REGISTRY_ERROR: registryError ?? "",
       },
     },
   );
   return { child, invocations: readInvocations(publishLog) };
 }
 
-test("derives the publish set from version changes instead of registry absence", () => {
-  const previousVersionsByFile = new Map([
-    ["cli/diffgazer/package.json", "0.1.3"],
-    ["cli/add/package.json", "0.1.1"],
-    ["libs/ui/package.json", "0.1.0"],
-    ["libs/keys/package.json", "0.1.0"],
-  ]);
-
-  assert.deepEqual(
-    findVersionChangedPackageNames({ packages: packageFixtures, previousVersionsByFile }),
-    ["diffgazer"],
-  );
-});
-
-test("plans pending versions as publications or registry recoveries", () => {
+test("plans a version as a publication when npm lacks it and as a tag when only git does", () => {
   const plan = createPublishPlan({
     packages: packageFixtures,
     publishedVersionsByName: new Map(
       Object.entries({ ...publishedVersionsByName, diffgazer: ["0.1.3", "0.1.4"] }),
     ),
     allowlist: ["diffgazer", "@diffgazer/add"],
-    pendingNames: ["diffgazer", "@diffgazer/add"],
+    candidateNames: ["diffgazer", "@diffgazer/add"],
+    releaseTags: new Set(),
   });
 
   assert.deepEqual(
     plan.map((pkg) => [pkg.name, pkg.publication]),
     [
-      ["diffgazer", "recover"],
+      ["diffgazer", "tag"],
       ["@diffgazer/add", "publish"],
     ],
   );
 });
 
-test("a gated package in the pending set fails before publication", () => {
+test("a version that is on npm and tagged drops out of the plan", () => {
+  const plan = createPublishPlan({
+    packages: packageFixtures,
+    publishedVersionsByName: new Map(
+      Object.entries({ ...publishedVersionsByName, diffgazer: ["0.1.3", "0.1.4"] }),
+    ),
+    allowlist: ["diffgazer", "@diffgazer/add"],
+    candidateNames: ["diffgazer", "@diffgazer/add"],
+    releaseTags: new Set(["diffgazer@0.1.4"]),
+  });
+
+  assert.deepEqual(
+    plan.map((pkg) => [pkg.name, pkg.publication]),
+    [["@diffgazer/add", "publish"]],
+  );
+});
+
+test("a gated package among the candidates fails before publication", () => {
   assert.throws(
     () =>
       createPublishPlan({
         packages: packageFixtures,
         publishedVersionsByName: new Map(Object.entries(publishedVersionsByName)),
         allowlist: ["diffgazer"],
-        pendingNames: ["@diffgazer/add"],
+        candidateNames: ["@diffgazer/add"],
+        releaseTags: new Set(),
       }),
     /refusing to first-publish gated packages: @diffgazer\/add/,
   );
@@ -319,25 +338,33 @@ test("the gated-package rejection names the publishable subset to pass explicitl
         packages: packageFixtures,
         publishedVersionsByName: new Map(Object.entries(publishedVersionsByName)),
         allowlist: ["diffgazer"],
-        pendingNames: ["diffgazer", "@diffgazer/ui", "@diffgazer/keys"],
+        candidateNames: ["diffgazer", "@diffgazer/ui", "@diffgazer/keys"],
+        releaseTags: new Set(),
       }),
     /pnpm run release diffgazer$/m,
   );
 });
 
-test("child publisher for the add rollout never attempts unrelated unpublished packages", () => {
+// A bare run considers every public package, so a never-published one outside
+// the allowlist blocks the whole run rather than being skipped as "not versioned
+// by this commit".
+test("a bare run refuses a never-published package outside the allowlist before pnpm starts", () => {
   const { child, invocations } = runMainChild({
     allowlist: ["diffgazer", "@diffgazer/add"],
     versions: { "@diffgazer/add": "0.1.1" },
   });
 
-  assert.equal(child.status, 0, child.stderr);
-  assert.deepEqual(invocations, [["--filter", "@diffgazer/add", "publish", "--no-git-checks"]]);
+  assert.notEqual(child.status, 0);
+  assert.match(
+    child.stderr,
+    /refusing to first-publish gated packages: @diffgazer\/keys, @diffgazer\/ui/,
+  );
+  assert.deepEqual(invocations, []);
 });
 
-test("child publisher supports the inverse UI and keys rollout without attempting add", () => {
-  const { child, invocations } = runMainChild({
-    allowlist: ["diffgazer", "@diffgazer/ui", "@diffgazer/keys"],
+test("an explicit subset publishes only the named packages", () => {
+  const { child, invocations } = runDirectScriptChild({
+    requestedNames: ["@diffgazer/ui", "@diffgazer/keys"],
     versions: { "@diffgazer/ui": "0.1.1", "@diffgazer/keys": "0.1.1" },
   });
 
@@ -362,15 +389,20 @@ test("invoking the guard script directly refuses to first-publish a package outs
   assert.deepEqual(invocations, []);
 });
 
-test("a bare run at the version commit publishes every release-managed package the commit bumped", () => {
+// The Version PR commit's own CI can fail for a reason a later commit fixes
+// (a README pinned to the package version, say). The guard runs on that later
+// commit and publishes whatever npm still lacks; the commit that happened to be
+// green does not decide the set.
+test("a later green commit publishes the versions the version commit left unpublished", () => {
   const { child, invocations } = runDirectScriptChild({
     requestedNames: [],
     versions: {
       diffgazer: "0.2.0",
       "@diffgazer/add": "0.2.0",
-      "@diffgazer/ui": "0.2.0",
-      "@diffgazer/keys": "0.2.0",
+      "@diffgazer/ui": "0.3.0",
+      "@diffgazer/keys": "0.3.0",
     },
+    registryVersions: { ...publishedVersionsByName, diffgazer: ["0.1.1", "0.1.2", "0.1.3"] },
   });
 
   assert.equal(child.status, 0, child.stderr);
@@ -382,38 +414,57 @@ test("a bare run at the version commit publishes every release-managed package t
   ]);
   assert.deepEqual(child.stdout.match(/^New tag: .+$/gm)?.sort(), [
     "New tag: @diffgazer/add@0.2.0",
-    "New tag: @diffgazer/keys@0.2.0",
-    "New tag: @diffgazer/ui@0.2.0",
+    "New tag: @diffgazer/keys@0.3.0",
+    "New tag: @diffgazer/ui@0.3.0",
     "New tag: diffgazer@0.2.0",
   ]);
 });
 
-test("default pending set rejects a gated target without starting pnpm", () => {
-  const pendingNames = findVersionChangedPackageNames({
-    packages: packageFixtures,
-    previousVersionsByFile: new Map([
-      ["cli/diffgazer/package.json", "0.1.3"],
-      ["cli/add/package.json", "0.1.0"],
-      ["libs/ui/package.json", "0.1.0"],
-      ["libs/keys/package.json", "0.1.0"],
-    ]),
+test("a bare run after a complete release publishes and announces nothing", () => {
+  const { child, invocations } = runDirectScriptChild({
+    requestedNames: [],
+    versions: { diffgazer: "0.1.4", "@diffgazer/add": "0.1.1" },
+    registryVersions: {
+      diffgazer: ["0.1.3", "0.1.4"],
+      "@diffgazer/add": ["0.1.1"],
+      "@diffgazer/ui": ["0.1.0"],
+      "@diffgazer/keys": ["0.1.0"],
+    },
+    existingTags: [
+      "diffgazer@0.1.4",
+      "@diffgazer/add@0.1.1",
+      "@diffgazer/ui@0.1.0",
+      "@diffgazer/keys@0.1.0",
+    ],
   });
-  assert.deepEqual(pendingNames, ["diffgazer", "@diffgazer/add"]);
 
-  const { child, invocations } = runPublisherChild({
-    allowlist: ["diffgazer"],
-    pendingNames,
+  assert.equal(child.status, 0, child.stderr);
+  assert.deepEqual(invocations, []);
+  assert.doesNotMatch(child.stdout, /^New tag:/m);
+  assert.match(child.stdout, /no eligible package versions need publication/);
+});
+
+// Only an E404 means "never published". Any other registry failure (DNS, a 5xx,
+// auth) says nothing about what npm holds, so reading it as "absent" would
+// publish on a guess; the run stops before pnpm starts, with npm's own stderr.
+test("a registry error other than E404 stops the run before any publish", () => {
+  const { child, invocations } = runDirectScriptChild({
+    requestedNames: [],
+    versions: { diffgazer: "0.2.0", "@diffgazer/add": "0.2.0" },
+    registryError:
+      "npm error code ENOTFOUND\nnpm error network request to https://registry.npmjs.org/ failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org",
   });
 
   assert.notEqual(child.status, 0);
-  assert.match(child.stderr, /refusing to first-publish gated packages/);
+  assert.match(child.stderr, /npm view \S+ failed \(not an E404\)/);
+  assert.match(child.stderr, /getaddrinfo ENOTFOUND registry\.npmjs\.org/);
   assert.deepEqual(invocations, []);
 });
 
 test("reports successfully published versions in the changesets action tag format", () => {
   const { child, directory, tags } = runPublisherChild({
     allowlist: ["diffgazer", "@diffgazer/add"],
-    pendingNames: ["diffgazer", "@diffgazer/add"],
+    candidateNames: ["diffgazer", "@diffgazer/add"],
   });
 
   assert.equal(child.status, 0, child.stderr);
@@ -435,10 +486,10 @@ test("reports successfully published versions in the changesets action tag forma
   }
 });
 
-test("creates release tags for recovered packages without republishing", () => {
+test("creates release tags for already published versions without republishing", () => {
   const { child, invocations, tags } = runPublisherChild({
     allowlist: ["diffgazer", "@diffgazer/add"],
-    pendingNames: ["diffgazer", "@diffgazer/add"],
+    candidateNames: ["diffgazer", "@diffgazer/add"],
     registryVersions: {
       ...publishedVersionsByName,
       diffgazer: ["0.1.3", "0.1.4"],
@@ -453,7 +504,7 @@ test("creates release tags for recovered packages without republishing", () => {
 test("recovers a partial publication without republishing the completed package", () => {
   const firstAttempt = runPublisherChild({
     allowlist: ["diffgazer", "@diffgazer/add"],
-    pendingNames: ["diffgazer", "@diffgazer/add"],
+    candidateNames: ["diffgazer", "@diffgazer/add"],
     pnpmExitCodes: [0, 1],
   });
 
@@ -466,7 +517,7 @@ test("recovers a partial publication without republishing the completed package"
 
   const retry = runPublisherChild({
     allowlist: ["diffgazer", "@diffgazer/add"],
-    pendingNames: ["diffgazer", "@diffgazer/add"],
+    candidateNames: ["diffgazer", "@diffgazer/add"],
     registryVersions: {
       ...publishedVersionsByName,
       diffgazer: ["0.1.3", "0.1.4"],
@@ -484,14 +535,14 @@ test("recovers a partial publication without republishing the completed package"
 });
 
 // changesets/action turns every `New tag:` line into a pushed tag and a
-// GitHub Release. A package named explicitly on a changeset-free commit must
-// not be announced: its version is already live, and announcing it asks GitHub
-// for a release that already exists.
-test("a commit that versions nothing announces no tag for an already published version", () => {
+// GitHub Release. A version that is live on npm and already tagged must not be
+// announced again: that asks GitHub for a release that already exists.
+test("a published version whose tag exists is skipped silently", () => {
   const { child, invocations } = runDirectScriptChild({
     requestedNames: ["diffgazer"],
     versions: {},
     registryVersions: { ...publishedVersionsByName, diffgazer: ["0.1.3"] },
+    existingTags: ["diffgazer@0.1.3"],
   });
 
   assert.equal(child.status, 0, child.stderr);
@@ -499,7 +550,7 @@ test("a commit that versions nothing announces no tag for an already published v
   assert.doesNotMatch(child.stdout, /^New tag:/m);
 });
 
-test("a retry at the version commit re-announces the recovered version", () => {
+test("a published version whose tag is missing is announced without republishing", () => {
   const { child, invocations } = runDirectScriptChild({
     requestedNames: ["diffgazer"],
     versions: { diffgazer: "0.1.4" },
@@ -514,7 +565,7 @@ test("a retry at the version commit re-announces the recovered version", () => {
 test("does not report a tag when an unpublished package fails", () => {
   const { child } = runPublisherChild({
     allowlist: ["@diffgazer/add"],
-    pendingNames: ["@diffgazer/add"],
+    candidateNames: ["@diffgazer/add"],
     pnpmExitCodes: [1],
   });
 

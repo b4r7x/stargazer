@@ -188,9 +188,15 @@ test(
           env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH ?? ""}` },
         },
       );
-      assert.equal(publishGuard.status, 0, publishGuard.stderr);
-      assert.ok(publishGuard.stdout.includes("no eligible package versions need publication"));
-      assert.equal(publishGuard.stderr, "");
+      // The guard reads the manifests through git and the registry through npm
+      // from this path, then reaches its policy decision: an unlisted,
+      // never-published public package blocks the run.
+      assert.notEqual(publishGuard.status, 0);
+      assert.ok(
+        publishGuard.stderr.includes("refusing to first-publish gated packages: @fixture/blocked"),
+        publishGuard.stderr,
+      );
+      assert.equal(publishGuard.stdout, "");
     } finally {
       rmSync(checkoutRoot, { recursive: true, force: true });
     }

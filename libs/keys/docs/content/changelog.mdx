@@ -13,6 +13,20 @@ description: Release notes for `@diffgazer/keys`.
 - Copy targets are described as `@hooks/...` alias tokens instead of hardcoded `src/` paths, so a copied hook lands under the consumer's configured source root. The `navigation` item also copies the `hotkey` helper it depends on.
 - Focus restoration and focus traps work across owner documents and shadow roots, and action-row focus repair no longer steals focus.
 - Correctness and accessibility fixes across the hooks and utilities.
+- Hotkey strings are checked at compile time. `ValidateHotkey<S>` and `HotkeyModifier` (`"ctrl" | "meta" | "shift" | "alt" | "mod"`) are exported, and `keys()`, `canonicalizeHotkey`, every `useKey` overload, and `KeyboardContextValue.register` validate string literals through them. A literal whose `+`-delimited modifier segment is outside that vocabulary no longer type-checks; the final key segment is unconstrained, and a non-literal `string` passes through. Spell modifiers from the vocabulary (`"Cmd+K"` -> `"mod+k"`) and keep computed hotkeys typed as `string`. `keys()` takes and returns `KeyHandler` in place of `(event) => void`.
+- `KeyHandler` is declared as `(event: KeyboardEvent) => unknown`. The former `| Decline` was already absorbed by `unknown`, so nothing stops compiling and returning `DECLINE` still declines the event. `Decline` and `DECLINE` stay exported.
+- `useActionRowNavigation` and `UseActionRowNavigationOptions` are no longer generic over an actions tuple: `actionCount`, `defaultIndex`, and the `onAction`/`onNavigate` index are `number`, and `disabledActions` is `readonly boolean[]`. Drop the type argument and widen any callback parameter narrowed to a tuple index union.
+- `useActionRowNavigation` accepts `scope` (an explicit keyboard scope) and `actionIds` (stable per-index control identities, so a rebuild at the focused index is repaired onto the new element), and returns `isRegisteredActionFocused()`, which reports whether DOM focus rests on the registered action at `focusedIndex`.
+- `useFocusZone` accepts `tabCycleScope` (`"containers"` or `"document"`) and `tabCycleBoundary` to control where Tab/Shift+Tab cycling claims the Tab key.
+- Added `composedContains`, `composedClosest`, `isReachable`, and `isInsideDisabledFieldset` to the public entry: containment and ancestor lookup that cross shadow boundaries, the hidden/inert/`aria-hidden`/closed-`<details>` reachability check shared by `isFocusable` and item discovery, and the `fieldset[disabled]` check that exempts descendants of the first `<legend>`.
+- Exported the `ZoneTransition<T>` type, added `itemSelector` to `NavigationItemQuery` and `UseNavigationOptions`, and added `allowInInput` to `UseScopedNavigationOptions`.
+- `focusNavigationItem` no longer accepts `fallback: "none"`; omit `fallback` for the same behavior.
+- New `@diffgazer/keys/testing/navigation-behavior` entry exporting `testNavigationBehavior`, `NavigationCase`, and `TestNavigationBehaviorOptions`, with `@testing-library/react`, `@testing-library/user-event`, and `vitest` as optional peer dependencies.
+- Requires Node `>=22.0.0` and resolves through `exports` only: the top-level `main` and `types` fields are gone, so TypeScript consumers on `moduleResolution: "node"` must move to `bundler`, `node16`, or `nodenext`.
+
+### Patch changes
+
+- The npm tarball ships `dist` plus the readme, license, and policy files: `registry/`, `public/r/`, and `internal-docs-manifest.json` are no longer packed, `CHANGELOG.md` is, and `dist/**/*.map` is excluded.
 
 ## 0.2.0
 

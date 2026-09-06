@@ -62,7 +62,7 @@
     "ui:test": "pnpm --filter @diffgazer/ui test",
     "keys:playground": "pnpm --dir libs/keys/examples/playground dev",
     "changeset": "changeset",
-    "version-packages": "changeset version && pnpm run prepare:library-artifacts && turbo run build --filter=@diffgazer/core --filter=@diffgazer/server && pnpm --filter diffgazer build:bundle && pnpm --filter diffgazer build:notices",
+    "version-packages": "changeset version && node scripts/monorepo/sync-add-readme-version.mjs && pnpm run prepare:library-artifacts && turbo run build --filter=@diffgazer/core --filter=@diffgazer/server && pnpm --filter diffgazer build:bundle && pnpm --filter diffgazer build:notices",
     "release": "node scripts/monorepo/guard-publish.mjs"
   },
   "devDependencies": {
