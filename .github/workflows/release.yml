@@ -34,7 +34,11 @@ jobs:
       && github.event.workflow_run.head_repository.full_name == github.repository
       && github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The readiness gate takes ~25 min on this runner, and each package's
+    # `prepublishOnly`/`prepack` (build, type-check, tests) runs again inside
+    # `pnpm publish` for all four packages, another ~30 min. A 30 min budget
+    # cancelled the first real publish mid-way through the first package.
+    timeout-minutes: 90
     permissions:
       contents: write
       pull-requests: write
@@ -112,7 +116,8 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     environment: production
-    timeout-minutes: 30
+    # Same gate plus the same per-package prepublish work as the release job.
+    timeout-minutes: 90
     permissions:
       actions: read
       contents: write
