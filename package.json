@@ -11,7 +11,7 @@
   "bugs": {
     "url": "https://github.com/b4r7x/diffgazer/issues"
   },
-  "packageManager": "pnpm@11.13.0",
+  "packageManager": "pnpm@11.19.0",
   "scripts": {
     "build": "if [ \"$DIFFGAZER_SKIP_ARTIFACT_PREPARE\" != \"1\" ]; then pnpm run prepare:artifacts; fi && DIFFGAZER_SKIP_ARTIFACT_PREPARE=1 pnpm exec turbo run build",
     "format": "biome format --write .",

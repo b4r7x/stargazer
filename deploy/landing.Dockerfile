@@ -1,7 +1,7 @@
 # Stage 1: Build landing page
 FROM node:24-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS builder
 
-RUN corepack enable && corepack prepare pnpm@11.13.0 --activate
+RUN corepack enable && corepack prepare pnpm@11.19.0 --activate
 # python3/make/g++: the workspace lockfile carries node-pty (a root dev
 # dependency with an allowed build), which node-gyp compiles from source on
 # Alpine during `pnpm fetch`.

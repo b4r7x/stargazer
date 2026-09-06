@@ -294,69 +294,44 @@ test("the root build hands the prepared packages to a single Turbo build graph",
 });
 
 // `prepack` fires on every pack, not only on publish — smoke's tarball install,
-// `attw --pack`, and the release-check dry-runs all reach it — so it owns the
-// build alone and the package gates live on the publish-only hook. Both diffgazer gates run from source (`tsc --noEmit`,
-// vitest against `src/`), so they do not need the packed `dist`.
-const diffgazerPackageJson = JSON.parse(
-  readFileSync(
-    fileURLToPath(new URL("../../cli/diffgazer/package.json", import.meta.url)),
-    "utf-8",
-  ),
+// `attw --pack`, the release-check dry-runs, and `pnpm publish` all reach it —
+// so it owns the build alone, and nothing else in the publish lifecycle repeats
+// the package gates. The Release workflow runs `release-check` once, right
+// before `pnpm run release`, and that chain already builds, type-checks, tests,
+// and artifact-validates every package (the RELEASE_CHECK_* lists above pin
+// it). A `prepublishOnly` re-running the same work inside `pnpm publish` cost
+// another ~30 min on the runner and timed out the first real publish
+// mid-package.
+const PUBLISHED_PACKAGE_MANIFESTS = [
+  "cli/diffgazer/package.json",
+  "cli/add/package.json",
+  "libs/ui/package.json",
+  "libs/keys/package.json",
+].map((file) =>
+  JSON.parse(readFileSync(fileURLToPath(new URL(`../../${file}`, import.meta.url)), "utf-8")),
 );
-const addPackageJson = JSON.parse(
-  readFileSync(fileURLToPath(new URL("../../cli/add/package.json", import.meta.url)), "utf-8"),
-);
 
-const PUBLISH_LIFECYCLE_HOOKS = ["prepublishOnly", "prepack", "prepare"];
-
-test("diffgazer runs its package build once across the publish lifecycle hooks", () => {
-  const segments = PUBLISH_LIFECYCLE_HOOKS.map((hook) => diffgazerPackageJson.scripts[hook])
-    .filter((script) => typeof script === "string")
-    .flatMap(scriptSegments);
-  assert.deepEqual(
-    segments.filter((segment) => segment === "pnpm run build"),
-    ["pnpm run build"],
-  );
+test("every published package builds in prepack and in no other publish lifecycle hook", () => {
+  for (const manifest of PUBLISHED_PACKAGE_MANIFESTS) {
+    assert.equal(manifest.scripts.prepack, "pnpm run build", `${manifest.name} prepack`);
+    assert.equal(manifest.scripts.prepare, undefined, `${manifest.name} must not build in prepare`);
+  }
 });
 
-test("packing diffgazer builds the dist without re-running its package gates", () => {
-  const prepack = scriptSegments(diffgazerPackageJson.scripts.prepack);
-  assert.ok(prepack.includes("pnpm run build"), "prepack must build the packed dist");
-  assert.deepEqual(
-    prepack.filter((segment) => segment === "pnpm run type-check" || segment === "pnpm run test"),
-    [],
-    "prepack runs on every pack, so a gate here re-runs the suite for smoke, attw, and dry-runs",
+// The one publish-only step release-check does not run: @diffgazer/ui's
+// README/changelog cross-check lives in neither its build nor its tests, so it
+// keeps a prepublishOnly of exactly that step. Every other hook segment the
+// packages used to carry is a release-check segment or a Turbo task it runs.
+test("only @diffgazer/ui keeps a prepublishOnly hook, and it is the release-docs check alone", () => {
+  const hooks = Object.fromEntries(
+    PUBLISHED_PACKAGE_MANIFESTS.map((manifest) => [manifest.name, manifest.scripts.prepublishOnly]),
   );
-});
-
-test("publishing diffgazer runs its package gates", () => {
-  assert.deepEqual(scriptSegments(diffgazerPackageJson.scripts.prepublishOnly), [
-    "pnpm run type-check",
-    "pnpm run test",
-  ]);
-});
-
-test("Add builds once in prepack and keeps prepublishOnly validation-only", () => {
-  const segments = [addPackageJson.scripts.prepublishOnly, addPackageJson.scripts.prepack].flatMap(
-    scriptSegments,
-  );
-  assert.deepEqual(
-    segments.filter((segment) => segment === "pnpm run build"),
-    ["pnpm run build"],
-  );
-  assert.equal(
-    scriptSegments(addPackageJson.scripts.prepublishOnly).includes("pnpm run build"),
-    false,
-  );
-  // The artifact gate leads because it also prepares what the other two read:
-  // `type-check` resolves the workspace packages through their built dist and
-  // `test` loads the gitignored src/generated/. prepack, the only hook that
-  // builds, does not run until prepublishOnly has already passed.
-  assert.deepEqual(scriptSegments(addPackageJson.scripts.prepublishOnly), [
-    "pnpm run validate:artifacts",
-    "pnpm run type-check",
-    "pnpm run test",
-  ]);
+  assert.deepEqual(hooks, {
+    diffgazer: undefined,
+    "@diffgazer/add": undefined,
+    "@diffgazer/ui": "pnpm run validate:release-docs",
+    "@diffgazer/keys": undefined,
+  });
 });
 
 test("the add test cache includes the published installer schema", () => {

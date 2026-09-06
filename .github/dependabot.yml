@@ -16,6 +16,12 @@ updates:
       github-actions:
         patterns:
           - "*"
+    # changesets/action v2 needs Changesets CLI v3, kebab-case inputs,
+    # push-with-git-cli, and a CHANGESETS_OUTPUT tag protocol from
+    # guard-publish.mjs; it migrates in a dedicated PR, not the weekly group.
+    ignore:
+      - dependency-name: "changesets/action"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "docker"
     directories:

@@ -33,7 +33,7 @@ docker run --rm --init --ipc=host \
     git -C /src archive HEAD | tar -x -C /work
     cd /work
     corepack enable
-    corepack prepare pnpm@11.13.0 --activate
+    corepack prepare pnpm@11.19.0 --activate
     pnpm install --frozen-lockfile
     pnpm --filter @diffgazer/core build
     pnpm --filter @diffgazer/web exec playwright test --grep @parity --update-snapshots

@@ -34,11 +34,27 @@ jobs:
       && github.event.workflow_run.head_repository.full_name == github.repository
       && github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
-    # The readiness gate takes ~25 min on this runner, and each package's
-    # `prepublishOnly`/`prepack` (build, type-check, tests) runs again inside
-    # `pnpm publish` for all four packages, another ~30 min. A 30 min budget
-    # cancelled the first real publish mid-way through the first package.
-    timeout-minutes: 90
+    # Budget = setup + gate + publish, with headroom for a slow runner:
+    #   setup (checkout, pnpm install, Chromium)   ~1 min observed
+    #   `release-check`                             24.5-27.6 min observed over
+    #                                               four runs (34026760050,
+    #                                               34021781478, 33988183640,
+    #                                               33996118985)
+    #   `pnpm run release`: four `prepack` builds
+    #   (~1 min, see below) + four npm uploads
+    #   with provenance                             ~3 min
+    #   = ~32 min at the slow end; 45 leaves ~13 min for a cold cache or a
+    #   slower runner.
+    # Of the four builds, only diffgazer's `build:deps` replays from the gate's
+    # warm Turbo cache; ui, keys, and add run tsup/tsc directly, and so do
+    # diffgazer's own web embed, tsup bundle, and notices. Local dry-runs:
+    # keys 6 s, ui 21 s, add 1 s, diffgazer 36 s — about a minute together.
+    # The gate is the only verification before publish — no package runs a
+    # `prepublishOnly` suite inside `pnpm publish` (PACKAGE_GOVERNANCE.md,
+    # Package Build Guards). The old hooks repeated ~8 min of type-check and
+    # tests per run, and a 30 min budget once cancelled the first real publish
+    # mid-package.
+    timeout-minutes: 45
     permissions:
       contents: write
       pull-requests: write
@@ -46,7 +62,7 @@ jobs:
       issues: write
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha }}
@@ -91,8 +107,10 @@ jobs:
           # A bare `pnpm run release` publishes every release-managed package
           # whose manifest version is absent from npm and announces every
           # published version still missing its tag; guard-publish.mjs still
-          # refuses a never-published name that is not on its allowlist
-          # (PACKAGE_GOVERNANCE.md, Release Process).
+          # refuses a never-published name that is not on its allowlist, and
+          # refuses to run at all unless GITHUB_ACTIONS is "true" — this job —
+          # or an operator passes --allow-local (PACKAGE_GOVERNANCE.md,
+          # Release Process).
           publish: pnpm run release
           version: pnpm run version-packages
           commit: "chore: version packages"
@@ -118,8 +136,8 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     environment: production
-    # Same gate plus the same per-package prepublish work as the release job.
-    timeout-minutes: 90
+    # Same setup, gate, and four-build publish as the release job above.
+    timeout-minutes: 45
     permissions:
       actions: read
       contents: write
@@ -150,7 +168,7 @@ jobs:
           fi
 
       - name: Checkout selected recovery commit
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           ref: ${{ inputs.release_sha }}

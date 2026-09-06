@@ -185,7 +185,13 @@ test(
         {
           cwd: checkoutRoot,
           encoding: "utf8",
-          env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH ?? ""}` },
+          // The guard runs only inside the Release workflow; this test is about
+          // the path, not that gate, so it runs as the workflow would.
+          env: {
+            ...process.env,
+            GITHUB_ACTIONS: "true",
+            PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
+          },
         },
       );
       // The guard reads the manifests through git and the registry through npm

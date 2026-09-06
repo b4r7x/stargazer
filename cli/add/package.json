@@ -50,7 +50,6 @@
     "build": "if [ \"$DIFFGAZER_SKIP_ARTIFACT_PREPARE\" != \"1\" ]; then pnpm run generate:bundles; fi && rm -rf dist && tsup && node --import tsx scripts/copy-generated.ts",
     "validate:artifacts": "pnpm --dir ../.. validate:artifacts",
     "prepack": "pnpm run build",
-    "prepublishOnly": "pnpm run validate:artifacts && pnpm run type-check && pnpm run test",
     "dev": "tsc --noEmit --watch",
     "type-check": "tsc --noEmit && tsc --noEmit -p scripts/tsconfig.json && tsc --noEmit -p tsconfig.config.json",
     "check": "biome check .",

@@ -171,10 +171,28 @@ export function publishPendingPackages({
   return plan.map((pkg) => pkg.name);
 }
 
+// `pnpm run release` is the Release workflow's publish step and nothing else's
+// (PACKAGE_GOVERNANCE.md, Publish Flow): that job has just run the readiness
+// gate, which is the only verification before `pnpm publish`, and it holds the
+// OIDC identity `--provenance` signs with. A local shell has neither, so the
+// guard stops before reading npm unless the operator passes the flag on purpose.
+const LOCAL_OVERRIDE_FLAG = "--allow-local";
+
+function assertReleaseWorkflow(env, allowLocal) {
+  if (env.GITHUB_ACTIONS === "true" || allowLocal) return;
+  throw new Error(
+    `Publish guard: refusing to publish outside the Release workflow (GITHUB_ACTIONS is not "true"); pass ${LOCAL_OVERRIDE_FLAG} to override on purpose — see PACKAGE_GOVERNANCE.md, Publish Flow.`,
+  );
+}
+
 export function main({
   allowlist = FIRST_PUBLISH_ALLOWLIST,
-  requestedNames = process.argv.slice(2),
+  argv = process.argv.slice(2),
+  env = process.env,
 } = {}) {
+  const requestedNames = argv.filter((argument) => argument !== LOCAL_OVERRIDE_FLAG);
+  assertReleaseWorkflow(env, requestedNames.length !== argv.length);
+
   const packages = listPublicPackages();
   const candidateNames =
     requestedNames.length > 0 ? requestedNames : packages.map((pkg) => pkg.name);

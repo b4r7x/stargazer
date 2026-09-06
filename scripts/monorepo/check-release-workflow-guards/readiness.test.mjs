@@ -43,7 +43,7 @@ test("the CI secret scan is named for its bounded event range", () => {
 
   assert.equal(job?.name, "Gitleaks Event-Range Scan");
   assert.equal(scan?.name, "Gitleaks event-range scan");
-  assert.equal(scan?.uses, "gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7");
+  assert.equal(scan?.uses, "gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e");
   assert.doesNotMatch(`${job?.name}\n${scan?.name}`, /full[- ]history/i);
 });
 

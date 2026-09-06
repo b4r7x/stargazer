@@ -54,7 +54,6 @@
     "build:bundle": "tsup --metafile",
     "build:notices": "node --import tsx scripts/generate-third-party-notices.ts",
     "prepack": "pnpm run build",
-    "prepublishOnly": "pnpm run type-check && pnpm run test",
     "dev": "tsx --tsconfig tsconfig.json src/index.tsx --dev",
     "type-check": "tsc --noEmit && tsc --noEmit -p scripts/tsconfig.json && tsc --noEmit -p tsconfig.config.json",
     "check": "biome check .",

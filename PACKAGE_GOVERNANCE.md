@@ -112,15 +112,7 @@ Of the root scripts above, the checked-in CI workflow runs only `pnpm run build`
    pnpm run version-packages
    ```
 
-4. Publish updated packages:
-
-   ```bash
-   pnpm run release
-   ```
-
-   The bare command publishes every release-managed package whose manifest version is absent from npm, whichever commit bumped it, and announces every published version that has no `<name>@<version>` tag yet. All four release-managed packages are on the [first-publish allowlist](#first-publish-gate), so the preflight passes for any set drawn from them. Package names may still be passed to select a subset; the same preflight applies to it.
-
-5. Before publishing, verify tarball contents:
+4. Check what each tarball will ship (`release-check` repeats these dry-runs in CI):
 
    ```bash
    pnpm --filter @diffgazer/add pack --dry-run
@@ -128,6 +120,10 @@ Of the root scripts above, the checked-in CI workflow runs only `pnpm run build`
    pnpm --filter @diffgazer/keys pack --dry-run
    pnpm --filter diffgazer pack --dry-run
    ```
+
+5. Merge the Version PR. The Release workflow publishes; there is no local publish step. Its job runs `pnpm run release-check` and then, in the same job, a bare `pnpm run release`, which publishes every release-managed package whose manifest version is absent from npm, whichever commit bumped it, and announces every published version that has no `<name>@<version>` tag yet. All four release-managed packages are on the [first-publish allowlist](#first-publish-gate), so the preflight passes for any set drawn from them. Package names may still be passed to select a subset; the same preflight applies to it.
+
+   The readiness gate is the single verification before publish. Each `pnpm publish` runs `prepack` (the package build) and nothing else, except `@diffgazer/ui`'s release-docs check — see [Package Build Guards](#package-build-guards). And `guard-publish.mjs` refuses to run outside the Release workflow: it checks `GITHUB_ACTIONS === "true"` before it reads npm. The one documented way past that check is `pnpm run release --allow-local`, an operator override that is deliberately not in any package script and gives up the CI provenance identity (see [Recovery from publish failure](#recovery-from-publish-failure)).
 
 6. After publishing, verify npm registry installs:
 
@@ -182,12 +178,11 @@ setup, secret boundaries, public checks, and rollback steps are documented in
 
 ## Package Build Guards
 
-Package lifecycle guards currently in the repo:
+All four published packages carry `prepack: pnpm run build` and no other lifecycle hook, except `@diffgazer/ui`'s release-docs check below. `prepack` fires on every pack — the smoke tarball install, `attw --pack`, the release-check dry-runs, and `pnpm publish` itself — so a tarball always packs a fresh `dist`, and nothing else hangs off it. The `diffgazer` build first runs the workspace dependency builds for `@diffgazer/core`, `@diffgazer/server`, `@diffgazer/keys`, `@diffgazer/ui`, and `@diffgazer/web`.
 
-- `diffgazer`: `prepack` owns the build — it fires on every pack, including the smoke tarball install, `attw --pack`, and the release-check dry-run, so the package suite must not hang off it; `prepublishOnly` runs type-check and test. `build` first runs the required workspace dependency builds for `@diffgazer/core`, `@diffgazer/server`, `@diffgazer/keys`, `@diffgazer/ui`, and `@diffgazer/web`.
-- `@diffgazer/add`: `prepack` owns the build; `prepublishOnly` runs type-check, test, and root artifact validation.
-- `@diffgazer/ui`: `prepublishOnly` runs build, type-check, test, and root artifact validation.
-- `@diffgazer/keys`: `prepublishOnly` runs build, type-check, test, and root artifact validation.
+None of the packages runs type-check, tests, or artifact validation from a `prepublishOnly` hook. `release-check` is the single verification before publish: it builds every package, runs the Turbo type-check and test tasks, and validates artifacts, minutes before `pnpm run release` in the same job. Repeating that work inside each `pnpm publish` used to add minutes per package on top of a 25-27 minute gate (about eight minutes across the three packages the first successful run published), and a 30 minute job budget cancelled the first real publish mid-package. `scripts/monorepo/package-scripts.test.mjs` pins the hook shape.
+
+The one exception is `@diffgazer/ui`, whose `prepublishOnly` is exactly `pnpm run validate:release-docs`: the README and docs-changelog cross-check is part of neither its build nor its test suite, so `release-check` never reaches it. It takes seconds and reads the `dist` the gate already built.
 
 `release-check`, which the Release workflow runs before publishing, must also run pack dry-runs for all public packages: `diffgazer`, `@diffgazer/add`, `@diffgazer/ui`, and `@diffgazer/keys`.
 
@@ -202,7 +197,7 @@ Public packages are published through the root `pnpm run release` script. Its ta
 Publishing runs from `.github/workflows/release.yml` via `changesets/action`:
 
 1. A contributor adds a changeset on their PR (`pnpm run changeset`); merging the PR to `main` runs CI, and a green CI run on `main` triggers the release workflow, which opens (or updates) a `chore: version packages` PR that applies pending changesets, bumps versions, and updates CHANGELOGs.
-2. The Version PR is opened with `GITHUB_TOKEN`. GitHub does not trigger `pull_request` workflows for events created by that token, so the Version PR intentionally receives zero CI checks while open; no GitHub App or PAT is added. After it merges, the trusted push-to-main CI run verifies the merged commit, and its success triggers the release workflow, which runs `pnpm run release-check` and then `pnpm run release`, whose `pnpm publish --provenance` calls make npm record a provenance attestation for each published version. `pnpm run release` runs the targeted publisher in `scripts/monorepo/guard-publish.mjs`.
+2. The Version PR is opened with `GITHUB_TOKEN`. GitHub does not trigger `pull_request` workflows for events created by that token, so the Version PR intentionally receives zero CI checks while open; no GitHub App or PAT is added. After it merges, the trusted push-to-main CI run verifies the merged commit, and its success triggers the release workflow, which runs `pnpm run release-check` and then `pnpm run release`, whose `pnpm publish --provenance` calls make npm record a provenance attestation for each published version. `pnpm run release` runs the targeted publisher in `scripts/monorepo/guard-publish.mjs`. The readiness gate is the only verification between the checkout and the upload: each `pnpm publish` runs `prepack` (the package build) and nothing else, except `@diffgazer/ui`'s release-docs check ([Package Build Guards](#package-build-guards)). The publisher itself runs only inside that workflow — it exits before reading npm unless `GITHUB_ACTIONS` is `"true"` or the operator passes `--allow-local`.
 3. The workflow requires `secrets.NPM_TOKEN` until each public package is configured for npm Trusted Publishers: pnpm tries npm's OIDC token exchange first and falls back to the token when npm answers 404 (no trusted publisher for that package). Once trusted publishing is enabled per package on npmjs.com, the token becomes optional and the flag stays harmless.
 
 #### First-publish gate
@@ -217,7 +212,7 @@ If the Version PR's own push-to-main CI was red, fix forward: the next green pus
 
 If no trigger edge is coming (the run is wedged, or its `workflow_run` event was lost), use the same `Release` workflow's **Run workflow** action and provide a full 40-character merged-main commit as `release_sha`, normally the current tip of `main`. The `Recover Publish from Merged Main SHA` job validates that the selected commit is already contained in `main`, requires the CI run for that exact commit to have completed with every required job green, binds the job to the `production` environment, and then runs `pnpm run release-check` followed by the first-publish-protected release chain on a GitHub-hosted runner with OIDC provenance. The SHA chooses the tree that gets packed, not the versions that get published, so pick the newest green commit. The checked-in workflow does not prove a protected `production` environment or required reviewer approval; those rules live in repository settings.
 
-`release-check` is defence in depth, not a replacement for the exact-SHA CI evidence. It does not repeat the event-range Gitleaks scan (the action scans the current push or pull-request commit range; `fetch-depth: 0` does not make that scan full-history) or the `git status --short` dirty-tree guard after build. It does not run the full smoke matrix, the live models.dev fetch enabled by `DIFFGAZER_SMOKE_ALLOW_NETWORK=1`, the benchmark SLOs, or the remaining browser matrix (the docs Playwright suite, the broader web suite, the UI and landing suites, and the Lighthouse budgets) — those are local-only gates — nor the live registry check, which belongs to the deploy workflow: it runs after a `docs-registry` or `all` promote and rolls the promotion back when it fails. It still runs the provider web E2E spec listed above. Do not run the publish command locally: local token authentication does not provide the supported CI identity required by the package provenance policy. For any failure, open an issue or contact a maintainer before starting recovery so the team can confirm registry state first.
+`release-check` is defence in depth, not a replacement for the exact-SHA CI evidence. It does not repeat the event-range Gitleaks scan (the action scans the current push or pull-request commit range; `fetch-depth: 0` does not make that scan full-history) or the `git status --short` dirty-tree guard after build. It does not run the full smoke matrix, the live models.dev fetch enabled by `DIFFGAZER_SMOKE_ALLOW_NETWORK=1`, the benchmark SLOs, or the remaining browser matrix (the docs Playwright suite, the broader web suite, the UI and landing suites, and the Lighthouse budgets) — those are local-only gates — nor the live registry check, which belongs to the deploy workflow: it runs after a `docs-registry` or `all` promote and rolls the promotion back when it fails. It still runs the provider web E2E spec listed above. Do not run the publish command locally: `pnpm run release` refuses when `GITHUB_ACTIONS` is not `"true"`, and the `--allow-local` override exists so an operator can make that call consciously, not so the refusal can be scripted around — a local token login provides none of the CI identity the provenance policy needs, so `pnpm publish --provenance` fails there anyway. For any failure, open an issue or contact a maintainer before starting recovery so the team can confirm registry state first.
 
 ## Dependency Management
 

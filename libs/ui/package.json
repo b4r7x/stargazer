@@ -364,7 +364,7 @@
     "test:watch": "vitest",
     "test:types": "vitest --typecheck --typecheck.only --run",
     "prepack": "pnpm run build",
-    "prepublishOnly": "pnpm run build && pnpm run validate:release-docs && pnpm run type-check && pnpm run test && pnpm run validate:artifacts"
+    "prepublishOnly": "pnpm run validate:release-docs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

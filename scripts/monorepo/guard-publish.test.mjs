@@ -27,6 +27,13 @@ const publishedVersionsByName = {
   "@diffgazer/ui": [],
   "@diffgazer/keys": [],
 };
+// Every fixture manifest's starting version is on npm, so only a bumped one is pending.
+const releasedRegistryVersions = {
+  diffgazer: ["0.1.3"],
+  "@diffgazer/add": ["0.1.0"],
+  "@diffgazer/ui": ["0.1.0"],
+  "@diffgazer/keys": ["0.1.0"],
+};
 const temporaryDirectories = [];
 
 afterEach(() => {
@@ -135,6 +142,15 @@ function writePackage(directory, file, name, version, isPrivate = false) {
   writeFileSync(packageFile, `${JSON.stringify({ name, version, private: isPrivate })}\n`);
 }
 
+// `test:scripts` runs with GITHUB_ACTIONS=true in CI and without it locally, so
+// every child that reaches `main` gets the variable set or unset explicitly.
+function childEnv({ releaseWorkflow, ...variables }) {
+  const env = { ...process.env, ...variables };
+  delete env.GITHUB_ACTIONS;
+  if (releaseWorkflow) env.GITHUB_ACTIONS = "true";
+  return env;
+}
+
 // Two commits: the Version PR commit that bumps `versions`, then a later commit
 // that touches no manifest — the ordinary push to main the guard runs on when
 // the version commit's own CI never went green.
@@ -148,6 +164,7 @@ function createMainFixture({
   temporaryDirectories.push(directory);
   const binDirectory = path.join(directory, "bin");
   const publishLog = path.join(directory, "publish.log");
+  const npmLog = path.join(directory, "npm.log");
   mkdirSync(binDirectory);
 
   const manifests = [
@@ -176,7 +193,11 @@ function createMainFixture({
 
   writeExecutable(
     path.join(binDirectory, "npm"),
-    `if (process.env.REGISTRY_ERROR) {
+    `require("node:fs").appendFileSync(
+  process.env.NPM_LOG,
+  JSON.stringify(process.argv.slice(2)) + "\\n",
+);
+if (process.env.REGISTRY_ERROR) {
   console.error(process.env.REGISTRY_ERROR);
   process.exit(1);
 }
@@ -200,6 +221,7 @@ process.stdout.write(JSON.stringify(versions[name]));`,
     directory,
     binDirectory,
     publishLog,
+    npmLog,
     registryVersions: Object.fromEntries(
       Object.entries(registryVersions).filter(([, packageVersions]) => packageVersions.length > 0),
     ),
@@ -221,6 +243,7 @@ function runMainChild({ allowlist, versions, registryVersions = publishedVersion
     directory,
     binDirectory,
     publishLog,
+    npmLog,
     registryVersions: filteredRegistryVersions,
   } = createMainFixture({ versions, registryVersions });
 
@@ -231,53 +254,61 @@ function runMainChild({ allowlist, versions, registryVersions = publishedVersion
       "--input-type=module",
       "--eval",
       `import { main } from ${JSON.stringify(moduleUrl)};
-main({ allowlist: ${JSON.stringify(allowlist)}, requestedNames: [] });`,
+main({ allowlist: ${JSON.stringify(allowlist)}, argv: [] });`,
     ],
     {
       cwd: directory,
       encoding: "utf8",
-      env: {
-        ...process.env,
+      env: childEnv({
+        releaseWorkflow: true,
         PATH: `${binDirectory}${path.delimiter}${process.env.PATH ?? ""}`,
         PUBLISH_LOG: publishLog,
+        NPM_LOG: npmLog,
         REGISTRY_VERSIONS: JSON.stringify(filteredRegistryVersions),
-      },
+      }),
     },
   );
   return { child, invocations: readInvocations(publishLog) };
 }
 
 function runDirectScriptChild({
-  requestedNames,
+  argv,
   versions,
   registryVersions,
   registryError,
   extraManifests,
   existingTags,
+  releaseWorkflow = true,
 }) {
   const {
     directory,
     binDirectory,
     publishLog,
+    npmLog,
     registryVersions: filteredRegistryVersions,
   } = createMainFixture({ versions, registryVersions, extraManifests, existingTags });
 
   const child = spawnSync(
     process.execPath,
-    [path.resolve("scripts/monorepo/guard-publish.mjs"), ...requestedNames],
+    [path.resolve("scripts/monorepo/guard-publish.mjs"), ...argv],
     {
       cwd: directory,
       encoding: "utf8",
-      env: {
-        ...process.env,
+      env: childEnv({
+        releaseWorkflow,
         PATH: `${binDirectory}${path.delimiter}${process.env.PATH ?? ""}`,
         PUBLISH_LOG: publishLog,
+        NPM_LOG: npmLog,
         REGISTRY_VERSIONS: JSON.stringify(filteredRegistryVersions),
         REGISTRY_ERROR: registryError ?? "",
-      },
+      }),
     },
   );
-  return { child, invocations: readInvocations(publishLog) };
+  return {
+    child,
+    invocations: readInvocations(publishLog),
+    npmInvocations: readInvocations(npmLog),
+  };
 }
 
 test("plans a version as a publication when npm lacks it and as a tag when only git does", () => {
@@ -364,7 +395,7 @@ test("a bare run refuses a never-published package outside the allowlist before 
 
 test("an explicit subset publishes only the named packages", () => {
   const { child, invocations } = runDirectScriptChild({
-    requestedNames: ["@diffgazer/ui", "@diffgazer/keys"],
+    argv: ["@diffgazer/ui", "@diffgazer/keys"],
     versions: { "@diffgazer/ui": "0.1.1", "@diffgazer/keys": "0.1.1" },
   });
 
@@ -375,11 +406,74 @@ test("an explicit subset publishes only the named packages", () => {
   ]);
 });
 
+// The Release workflow is the only place the readiness gate has run and the
+// OIDC identity exists (PACKAGE_GOVERNANCE.md, Publish Flow). A local shell
+// gets refused before the registry is even read, so a stray `pnpm run release`
+// neither publishes nor leaks which versions it would have.
+test("a run outside the Release workflow is refused before npm or pnpm start", () => {
+  const { child, invocations, npmInvocations } = runDirectScriptChild({
+    argv: [],
+    versions: { diffgazer: "0.2.0", "@diffgazer/add": "0.2.0" },
+    releaseWorkflow: false,
+  });
+
+  assert.notEqual(child.status, 0);
+  assert.match(child.stderr, /refusing to publish outside the Release workflow/);
+  assert.match(child.stderr, /--allow-local/);
+  assert.match(child.stderr, /PACKAGE_GOVERNANCE\.md/);
+  assert.deepEqual(npmInvocations, []);
+  assert.deepEqual(invocations, []);
+});
+
+test("GITHUB_ACTIONS=true lets the bare run publish without any flag", () => {
+  const { child, invocations } = runDirectScriptChild({
+    argv: [],
+    versions: { diffgazer: "0.2.0" },
+    registryVersions: releasedRegistryVersions,
+    releaseWorkflow: true,
+  });
+
+  assert.equal(child.status, 0, child.stderr);
+  assert.deepEqual(invocations, [
+    ["--filter", "diffgazer", "publish", "--no-git-checks", "--provenance"],
+  ]);
+});
+
+// The flag is an operator override, not a package name: it must lift the
+// refusal wherever it sits in argv and never reach the subset selection.
+test("--allow-local lets a local run publish and is not read as a package name", () => {
+  const { child, invocations } = runDirectScriptChild({
+    argv: ["@diffgazer/ui", "--allow-local"],
+    versions: { "@diffgazer/ui": "0.1.1", "@diffgazer/keys": "0.1.1" },
+    releaseWorkflow: false,
+  });
+
+  assert.equal(child.status, 0, child.stderr);
+  assert.deepEqual(invocations, [
+    ["--filter", "@diffgazer/ui", "publish", "--no-git-checks", "--provenance"],
+  ]);
+});
+
+test("--allow-local alone still considers every public package", () => {
+  const { child, invocations } = runDirectScriptChild({
+    argv: ["--allow-local"],
+    versions: { diffgazer: "0.2.0", "@diffgazer/keys": "0.1.1" },
+    registryVersions: releasedRegistryVersions,
+    releaseWorkflow: false,
+  });
+
+  assert.equal(child.status, 0, child.stderr);
+  assert.deepEqual(invocations.map((invocation) => invocation[1]).sort(), [
+    "@diffgazer/keys",
+    "diffgazer",
+  ]);
+});
+
 // The shipped allowlist names every release-managed package, so the gate it
 // still enforces is against a public package nobody added to it.
 test("invoking the guard script directly refuses to first-publish a package outside the shipped allowlist", () => {
   const { child, invocations } = runDirectScriptChild({
-    requestedNames: ["@diffgazer/extra"],
+    argv: ["@diffgazer/extra"],
     versions: { "@diffgazer/extra": "0.1.1" },
     extraManifests: [["libs/extra/package.json", "@diffgazer/extra", "0.1.0"]],
   });
@@ -395,7 +489,7 @@ test("invoking the guard script directly refuses to first-publish a package outs
 // green does not decide the set.
 test("a later green commit publishes the versions the version commit left unpublished", () => {
   const { child, invocations } = runDirectScriptChild({
-    requestedNames: [],
+    argv: [],
     versions: {
       diffgazer: "0.2.0",
       "@diffgazer/add": "0.2.0",
@@ -422,7 +516,7 @@ test("a later green commit publishes the versions the version commit left unpubl
 
 test("a bare run after a complete release publishes and announces nothing", () => {
   const { child, invocations } = runDirectScriptChild({
-    requestedNames: [],
+    argv: [],
     versions: { diffgazer: "0.1.4", "@diffgazer/add": "0.1.1" },
     registryVersions: {
       diffgazer: ["0.1.3", "0.1.4"],
@@ -449,7 +543,7 @@ test("a bare run after a complete release publishes and announces nothing", () =
 // publish on a guess; the run stops before pnpm starts, with npm's own stderr.
 test("a registry error other than E404 stops the run before any publish", () => {
   const { child, invocations } = runDirectScriptChild({
-    requestedNames: [],
+    argv: [],
     versions: { diffgazer: "0.2.0", "@diffgazer/add": "0.2.0" },
     registryError:
       "npm error code ENOTFOUND\nnpm error network request to https://registry.npmjs.org/ failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org",
@@ -541,7 +635,7 @@ test("recovers a partial publication without republishing the completed package"
 // announced again: that asks GitHub for a release that already exists.
 test("a published version whose tag exists is skipped silently", () => {
   const { child, invocations } = runDirectScriptChild({
-    requestedNames: ["diffgazer"],
+    argv: ["diffgazer"],
     versions: {},
     registryVersions: { ...publishedVersionsByName, diffgazer: ["0.1.3"] },
     existingTags: ["diffgazer@0.1.3"],
@@ -554,7 +648,7 @@ test("a published version whose tag exists is skipped silently", () => {
 
 test("a published version whose tag is missing is announced without republishing", () => {
   const { child, invocations } = runDirectScriptChild({
-    requestedNames: ["diffgazer"],
+    argv: ["diffgazer"],
     versions: { diffgazer: "0.1.4" },
     registryVersions: { ...publishedVersionsByName, diffgazer: ["0.1.3", "0.1.4"] },
   });
