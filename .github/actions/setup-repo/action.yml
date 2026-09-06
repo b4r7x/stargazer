@@ -1,14 +1,6 @@
 name: Setup repo
 description: Install pnpm (version from root packageManager), Node 24 with pnpm cache, and frozen-lockfile dependencies.
 
-inputs:
-  registry-url:
-    description: Optional npm registry URL to write into .npmrc (release job only, enables NODE_AUTH_TOKEN auth).
-    required: false
-  scope:
-    description: Optional npm scope to pair with registry-url.
-    required: false
-
 runs:
   using: composite
   steps:
@@ -20,8 +12,6 @@ runs:
       with:
         node-version: 24
         cache: pnpm
-        registry-url: ${{ inputs.registry-url }}
-        scope: ${{ inputs.scope }}
 
     - name: Install
       run: pnpm install --frozen-lockfile

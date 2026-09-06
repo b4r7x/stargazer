@@ -174,8 +174,9 @@ export function publishPendingPackages({
 // `pnpm run release` is the Release workflow's publish step and nothing else's
 // (PACKAGE_GOVERNANCE.md, Publish Flow): that job has just run the readiness
 // gate, which is the only verification before `pnpm publish`, and it holds the
-// OIDC identity `--provenance` signs with. A local shell has neither, so the
-// guard stops before reading npm unless the operator passes the flag on purpose.
+// OIDC identity that trusted publishing authenticates with and `--provenance`
+// signs with. A local shell has neither, so the guard stops before reading npm
+// unless the operator passes the flag on purpose.
 const LOCAL_OVERRIDE_FLAG = "--allow-local";
 
 function assertReleaseWorkflow(env, allowLocal) {

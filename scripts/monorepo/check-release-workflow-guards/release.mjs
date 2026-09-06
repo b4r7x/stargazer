@@ -9,7 +9,7 @@ import {
 
 // The privileged release job must only run for trusted push provenance
 // from this repository's main branch. Dropping any of these guards would let a
-// pull_request-origin CI run reach the OIDC/npm-token release
+// pull_request-origin CI run reach the OIDC-bearing release
 // job, so guard each condition against silent removal.
 export const REQUIRED_RELEASE_GUARDS = [
   "github.event.workflow_run.conclusion == 'success'",
@@ -52,7 +52,7 @@ export function collectReleaseGuardFailures(source) {
   return failures;
 }
 
-const CHANGESETS_ACTION = "changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b";
+const CHANGESETS_ACTION = "changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d";
 
 const CHROMIUM_INSTALL_STEP = "Install Chromium";
 const CHROMIUM_INSTALL_COMMAND =
@@ -154,6 +154,23 @@ export function collectReleaseChangesetsFailures(source) {
         `${RELEASE_WORKFLOW_PATH}: ${jobName} must not set commitMode: github-api (version commits and tags must target checked-out HEAD, not GITHUB_SHA)`,
       );
     }
+    // Trusted publishing: pnpm runs npm's OIDC exchange first and keeps a static
+    // token only as its fallback, so a token on any step — or the
+    // `${NODE_AUTH_TOKEN}` placeholder setup-node writes to .npmrc for a
+    // registry-url — is the one way a revoked credential re-enters the publish.
+    for (const candidate of steps) {
+      const env = candidate?.env ?? {};
+      if (Object.hasOwn(env, "NPM_TOKEN") || Object.hasOwn(env, "NODE_AUTH_TOKEN")) {
+        failures.push(
+          `${RELEASE_WORKFLOW_PATH}: ${jobName} step "${candidate.name}" must not carry an npm token; publishing uses npm trusted publishing`,
+        );
+      }
+      if (candidate?.with?.["registry-url"] !== undefined) {
+        failures.push(
+          `${RELEASE_WORKFLOW_PATH}: ${jobName} step "${candidate.name}" must not pass registry-url; no .npmrc is needed, the OIDC exchange supplies the token`,
+        );
+      }
+    }
   }
 
   return failures;
@@ -213,8 +230,8 @@ export function collectReleaseRecoveryFailures(workflowSource, governanceSource)
   const readiness = step("Release readiness gate");
   const publish = step("Recover version metadata or publish");
 
-  // The dispatched ref decides which copy of these steps runs, so an npm-token- and
-  // OIDC-bearing job must refuse any ref but main, exactly as deploy.yml does for its
+  // The dispatched ref decides which copy of these steps runs, so an OIDC-bearing
+  // job must refuse any ref but main, exactly as deploy.yml does for its
   // privileged manual trigger. The input SHA guards below constrain what is published,
   // not the definition that publishes it.
   if (
@@ -291,7 +308,7 @@ export function collectReleaseRecoveryFailures(workflowSource, governanceSource)
     Array.isArray(workflow?.jobs?.release?.steps) ? workflow.jobs.release.steps : []
   ).find((candidate) => candidate?.name === "Version PR or publish")?.with?.publish;
   if (
-    publish?.uses !== "changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b" ||
+    publish?.uses !== "changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d" ||
     typeof normalPublish !== "string" ||
     !/^pnpm run release(?: \S+)*$/.test(normalPublish) ||
     publish?.with?.publish !== normalPublish

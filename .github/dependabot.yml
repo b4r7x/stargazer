@@ -37,6 +37,12 @@ updates:
       docker-updates:
         patterns:
           - "*"
+    # node:24 is the Active LTS line these images ship. Node 26 is Current,
+    # not LTS, until October 2026; revisit this ignore when it enters LTS and
+    # migrate in a dedicated PR, not the weekly group.
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directories:

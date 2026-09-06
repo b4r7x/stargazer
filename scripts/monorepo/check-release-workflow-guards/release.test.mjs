@@ -100,6 +100,47 @@ test("dropping the ephemeral credential teardown from either release job fails t
   );
 });
 
+// pnpm keeps a static token only as the fallback behind npm's OIDC exchange, so a
+// token on any step, or the `${NODE_AUTH_TOKEN}` .npmrc placeholder a registry-url
+// makes setup-node write, is how a revoked credential creeps back into a publish.
+test("an npm token on any step or a registry-url input fails either release job", () => {
+  const workflow = readFileSync(RELEASE_WORKFLOW_PATH, "utf8");
+  const githubTokenEnv = "          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n";
+  const setupRepo = "        uses: ./.github/actions/setup-repo\n";
+  const registryUrl = "        with:\n          registry-url: https://registry.npmjs.org\n";
+  const insertAfterLast = (source, search, insertion) => {
+    const index = source.lastIndexOf(search);
+    assert.notEqual(index, -1);
+    const end = index + search.length;
+    return `${source.slice(0, end)}${insertion}${source.slice(end)}`;
+  };
+  const cases = [
+    [
+      workflow.replace(githubTokenEnv, `${githubTokenEnv}          NPM_TOKEN: x\n`),
+      'release step "Configure ephemeral git credentials for changesets" must not carry an npm token',
+    ],
+    [
+      insertAfterLast(workflow, githubTokenEnv, "          NODE_AUTH_TOKEN: x\n"),
+      'recovery step "Recover version metadata or publish" must not carry an npm token',
+    ],
+    [
+      workflow.replace(setupRepo, `${setupRepo}${registryUrl}`),
+      'release step "Setup repo" must not pass registry-url',
+    ],
+    [
+      insertAfterLast(workflow, setupRepo, registryUrl),
+      'recovery step "Setup repo" must not pass registry-url',
+    ],
+  ];
+
+  for (const [source, expected] of cases) {
+    assert.ok(
+      collectReleaseChangesetsFailures(source).some((failure) => failure.includes(expected)),
+      expected,
+    );
+  }
+});
+
 test("the committed release recovery is hosted, merged-main-only, and OIDC protected", () => {
   assert.deepEqual(
     collectReleaseRecoveryFailures(
@@ -132,7 +173,7 @@ test("release recovery rejects loss of each security boundary", () => {
     ),
     workflow.replace("      actions: read\n", ""),
     // workflow_dispatch runs the definition from the selected ref, so the input-SHA
-    // guards above say nothing about which copy of these steps reaches NPM_TOKEN.
+    // guards above say nothing about which copy of these steps reaches the OIDC identity.
     workflow.replace('"${RELEASE_REF}" != "refs/heads/main"', "false"),
   ];
 

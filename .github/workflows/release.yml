@@ -27,7 +27,7 @@ jobs:
     # Only publish from trusted push provenance on this repository's main
     # branch. A `pull_request`-origin CI run (including a fork
     # whose head branch is named `main`) must never reach this privileged,
-    # OIDC- and npm-token-bearing job or its `head_sha` checkout.
+    # OIDC-bearing job or its `head_sha` checkout.
     if: >-
       ${{ github.event.workflow_run.conclusion == 'success'
       && github.event.workflow_run.event == 'push'
@@ -70,9 +70,6 @@ jobs:
 
       - name: Setup repo
         uses: ./.github/actions/setup-repo
-        with:
-          registry-url: https://registry.npmjs.org
-          scope: '@diffgazer'
 
       - name: Install Chromium
         run: pnpm --filter @diffgazer/web exec playwright install --with-deps chromium
@@ -102,7 +99,7 @@ jobs:
       # commit (PACKAGE_GOVERNANCE.md, Publish Flow). No App or PAT is used for
       # this intentional post-merge verification model.
       - name: Version PR or publish
-        uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1.8.0
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
           # A bare `pnpm run release` publishes every release-managed package
           # whose manifest version is absent from npm and announces every
@@ -115,15 +112,15 @@ jobs:
           version: pnpm run version-packages
           commit: "chore: version packages"
           title: "chore: version packages"
-        # NPM_TOKEN is consumed only when changesets/action takes the publish branch
-        # (i.e. after the Version PR is merged); it is unused on the version branch.
+        # No npm token: every `pnpm publish` exchanges this job's OIDC identity
+        # (`id-token: write`) for a short-lived token against the trusted
+        # publisher configured on npmjs.com for that package (GitHub Actions,
+        # b4r7x/diffgazer, workflow release.yml). changesets/action writes no
+        # .npmrc without NPM_TOKEN and only logs that OIDC is available.
         # Provenance is not an env switch: pnpm 11 reads no `NPM_CONFIG_*` env, so
-        # guard-publish.mjs passes `--provenance` to every `pnpm publish`, signed
-        # with this job's `id-token: write` identity while the token authenticates.
+        # guard-publish.mjs passes `--provenance` to every `pnpm publish`.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # Hand-written credentials get no post-job unset from actions/checkout, so
       # the header must not outlive the step that needed it.
@@ -146,7 +143,7 @@ jobs:
       issues: write
     steps:
       # workflow_dispatch executes the workflow definition from the ref the operator
-      # selected, so the steps that reach NPM_TOKEN and the OIDC identity must come
+      # selected, so the steps that reach the OIDC identity must come
       # from main. The environment reviewer sees a run name and a branch, never the
       # diff — the same reason deploy.yml guards its privileged manual trigger.
       - name: Require main branch
@@ -241,9 +238,6 @@ jobs:
 
       - name: Setup repo
         uses: ./.github/actions/setup-repo
-        with:
-          registry-url: https://registry.npmjs.org
-          scope: '@diffgazer'
 
       - name: Install Chromium
         run: pnpm --filter @diffgazer/web exec playwright install --with-deps chromium
@@ -266,7 +260,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Recover version metadata or publish
-        uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1.8.0
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
           # Same npm-derived publish as the primary job above, `--provenance`
           # included.
@@ -276,8 +270,6 @@ jobs:
           title: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # Same teardown as the primary job: nothing else unsets a hand-written header.
       - name: Remove ephemeral git credentials

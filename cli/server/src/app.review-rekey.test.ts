@@ -70,12 +70,13 @@ describe("review re-key wiring", () => {
 
     const originalRoot = join(diffgazerHome, "original");
     const movedRoot = join(diffgazerHome, "moved");
+    const projectFilePath = join(movedRoot, ".diffgazer", "project.json");
     mkdirSync(join(movedRoot, ".diffgazer"), { recursive: true });
     // A .git dir makes the path an allowed project root.
     mkdirSync(join(movedRoot, ".git"), { recursive: true });
     // project.json still points at the original (pre-move) repoRoot.
     writeFileSync(
-      join(movedRoot, ".diffgazer", "project.json"),
+      projectFilePath,
       JSON.stringify({
         projectId: "stable-id",
         repoRoot: originalRoot,
@@ -109,17 +110,20 @@ describe("review re-key wiring", () => {
     const info = store.ensureProjectFile(movedRoot);
     expect(info.projectId).toBe("stable-id");
 
-    // The handler is fire-and-forget; wait for the listing to move to the new path.
+    // The handler is fire-and-forget; project.json commits the new root only once the
+    // re-key reports complete, after the source index is removed. Polling the new path's
+    // listing instead passes earlier, while the old index still serves its snapshot.
     await vi.waitFor(
-      async () => {
-        const underNew = await listReviewPage(movedRoot, { limit: 20 });
-        if (!underNew.ok || underNew.value.items.length !== 1) {
-          throw new Error("listing not yet re-keyed");
-        }
-        expect(underNew.value.items[0]?.id).toBe(reviewId);
+      () => {
+        expect(JSON.parse(readFileSync(projectFilePath, "utf-8"))).toMatchObject({
+          repoRoot: movedRoot,
+        });
       },
       { timeout: 3000, interval: 20 },
     );
+
+    const underNew = await listReviewPage(movedRoot, { limit: 20 });
+    expect(underNew.ok && underNew.value.items.map((item) => item.id)).toEqual([reviewId]);
 
     const underOld = await listReviewPage(originalRoot, { limit: 20 });
     expect(underOld.ok).toBe(true);
