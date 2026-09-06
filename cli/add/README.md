@@ -212,7 +212,7 @@ Running `dgadd init` creates a `diffgazer.json` file in your project root. For a
 ```json
 {
   "$schema": "https://r.b4r7.dev/schema/diffgazer.json",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "aliases": {
     "components": "@/components/ui",
     "utils": "@/lib/utils",
