@@ -285,6 +285,8 @@ export function collectReleaseRecoveryFailures(workflowSource, governanceSource)
   // The publish command is compared against the normal job's rather than pinned to
   // a literal: the two must stay identical, and the command may carry package
   // names to select a recovery subset (PACKAGE_GOVERNANCE.md, Release Process).
+  // Provenance rides on that command (`--provenance` in guard-publish.mjs, pinned
+  // by its tests) and on `id-token: write` above; there is no env switch to check.
   const normalPublish = (
     Array.isArray(workflow?.jobs?.release?.steps) ? workflow.jobs.release.steps : []
   ).find((candidate) => candidate?.name === "Version PR or publish")?.with?.publish;
@@ -292,8 +294,7 @@ export function collectReleaseRecoveryFailures(workflowSource, governanceSource)
     publish?.uses !== "changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b" ||
     typeof normalPublish !== "string" ||
     !/^pnpm run release(?: \S+)*$/.test(normalPublish) ||
-    publish?.with?.publish !== normalPublish ||
-    publish?.env?.NPM_CONFIG_PROVENANCE !== "true"
+    publish?.with?.publish !== normalPublish
   ) {
     failures.push(`${RELEASE_WORKFLOW_PATH}: recovery must use the normal OIDC release chain`);
   }

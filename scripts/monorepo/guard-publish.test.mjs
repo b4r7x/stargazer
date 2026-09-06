@@ -370,8 +370,8 @@ test("an explicit subset publishes only the named packages", () => {
 
   assert.equal(child.status, 0, child.stderr);
   assert.deepEqual(invocations, [
-    ["--filter", "@diffgazer/keys", "publish", "--no-git-checks"],
-    ["--filter", "@diffgazer/ui", "publish", "--no-git-checks"],
+    ["--filter", "@diffgazer/keys", "publish", "--no-git-checks", "--provenance"],
+    ["--filter", "@diffgazer/ui", "publish", "--no-git-checks", "--provenance"],
   ]);
 });
 
@@ -497,7 +497,9 @@ test("creates release tags for already published versions without republishing",
   });
 
   assert.equal(child.status, 0, child.stderr);
-  assert.deepEqual(invocations, [["--filter", "@diffgazer/add", "publish", "--no-git-checks"]]);
+  assert.deepEqual(invocations, [
+    ["--filter", "@diffgazer/add", "publish", "--no-git-checks", "--provenance"],
+  ]);
   assert.deepEqual(tags.sort(), ["@diffgazer/add@0.1.1", "diffgazer@0.1.4"].sort());
 });
 
@@ -510,8 +512,8 @@ test("recovers a partial publication without republishing the completed package"
 
   assert.notEqual(firstAttempt.child.status, 0);
   assert.deepEqual(firstAttempt.invocations, [
-    ["--filter", "diffgazer", "publish", "--no-git-checks"],
-    ["--filter", "@diffgazer/add", "publish", "--no-git-checks"],
+    ["--filter", "diffgazer", "publish", "--no-git-checks", "--provenance"],
+    ["--filter", "@diffgazer/add", "publish", "--no-git-checks", "--provenance"],
   ]);
   assert.doesNotMatch(firstAttempt.child.stdout, /^New tag:/m);
 
@@ -526,7 +528,7 @@ test("recovers a partial publication without republishing the completed package"
 
   assert.equal(retry.child.status, 0, retry.child.stderr);
   assert.deepEqual(retry.invocations, [
-    ["--filter", "@diffgazer/add", "publish", "--no-git-checks"],
+    ["--filter", "@diffgazer/add", "publish", "--no-git-checks", "--provenance"],
   ]);
   assert.deepEqual(retry.child.stdout.match(/^New tag: .+$/gm), [
     "New tag: diffgazer@0.1.4",

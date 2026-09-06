@@ -21,6 +21,12 @@ export const REGISTRY_DIGEST = `sha256:${"2".repeat(64)}`;
 // Digests build-scan pushed and scanned for SOURCE_TAG, i.e. what promotion must use.
 export const DOCS_SOURCE_DIGEST = `sha256:${"3".repeat(64)}`;
 export const REGISTRY_SOURCE_DIGEST = `sha256:${"4".repeat(64)}`;
+// The step pipes this into `docker login --password-stdin`. Longer than a pipe
+// buffer (64 KiB on Linux and macOS), so the producing printf blocks until the
+// docker shim drains stdin the way real docker does: a shim that exits first would
+// kill printf with SIGPIPE every time instead of only when the scheduler lets it.
+export const PIPE_BUFFER_BYTES = 64 * 1024;
+export const GHCR_TOKEN = "t".repeat(PIPE_BUFFER_BYTES + 32 * 1024);
 
 function promoteDeployStepRun(name) {
   const workflow = parse(readFileSync(DEPLOY_WORKFLOW_PATH, "utf8"));
@@ -68,6 +74,10 @@ export function runDeployTransaction(mode, missingProd = "", registryCheckFailur
 set -euo pipefail
 printf 'docker %s\\n' "$*" >> "$TRACE_PATH"
 if [ "\${1:-}" = "login" ]; then
+  if [ "$(cat)" != "$GHCR_TOKEN" ]; then
+    printf 'fixture: docker login did not receive GHCR_TOKEN on stdin\\n' >&2
+    exit 9
+  fi
   exit 0
 fi
 if [ "\${1:-}" = "buildx" ] && [ "\${2:-}" = "imagetools" ] && [ "\${3:-}" = "inspect" ]; then
@@ -138,7 +148,7 @@ exit 0
         IMAGE_OWNER: "ghcr.io/example",
         IMAGE_DIGEST_DIR: digestDir,
         GHCR_USERNAME: "github-user",
-        GHCR_TOKEN: "ghcr-token",
+        GHCR_TOKEN,
         COOLIFY_TOKEN: "coolify-token",
         COOLIFY_WEBHOOK_DOCS: "https://coolify.invalid/docs",
         COOLIFY_WEBHOOK_REGISTRY: "https://coolify.invalid/registry",

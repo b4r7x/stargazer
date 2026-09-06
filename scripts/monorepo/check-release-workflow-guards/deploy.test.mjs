@@ -5,6 +5,8 @@ import { collectDeployTransactionFailures } from "./deploy.mjs";
 import {
   DOCS_DIGEST,
   DOCS_SOURCE_DIGEST,
+  GHCR_TOKEN,
+  PIPE_BUFFER_BYTES,
   REGISTRY_DIGEST,
   REGISTRY_SOURCE_DIGEST,
   rollbackTriggers,
@@ -127,6 +129,18 @@ test("a job timeout that cannot outlast verification plus rollback is rejected",
       ),
     );
   }
+});
+
+// A docker shim that answered `login` without reading stdin raced the printf
+// feeding it: when the shim exited first, printf died of SIGPIPE, pipefail made
+// 141 the step status, and the step ended before the rollback trap was armed. The
+// fixture token outsizes the pipe buffer so that loss no longer depends on timing.
+test("docker login drains the piped GHCR token before it answers", () => {
+  const { result, trace } = runDeployTransaction("success");
+
+  assert.ok(GHCR_TOKEN.length > PIPE_BUFFER_BYTES);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(trace, /^docker login ghcr\.io -u github-user --password-stdin$/m);
 });
 
 test("a missing later digest record compensates every write-ahead promotion", () => {

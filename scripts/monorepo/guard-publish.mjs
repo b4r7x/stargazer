@@ -146,9 +146,16 @@ export function publishPendingPackages({
     return [];
   }
 
+  // `--provenance` is the one switch pnpm 11's native publish honours: it reads
+  // neither `NPM_CONFIG_PROVENANCE` (v11 dropped every `npm_config_*` env) nor
+  // `publishConfig.provenance` (npm's switch), and it only auto-attests when
+  // npm's OIDC token exchange succeeds — which needs a trusted publisher, not a
+  // token. @diffgazer/add@0.2.0 shipped without an attestation that way. With
+  // the flag explicit, pnpm fails the publish instead of skipping when it
+  // cannot sign (no `id-token: write`, a local shell).
   for (const pkg of plan) {
     if (pkg.publication === "tag") continue;
-    execFileSync("pnpm", ["--filter", pkg.name, "publish", "--no-git-checks"], {
+    execFileSync("pnpm", ["--filter", pkg.name, "publish", "--no-git-checks", "--provenance"], {
       stdio: "inherit",
     });
   }

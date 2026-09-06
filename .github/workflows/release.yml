@@ -99,11 +99,13 @@ jobs:
           title: "chore: version packages"
         # NPM_TOKEN is consumed only when changesets/action takes the publish branch
         # (i.e. after the Version PR is merged); it is unused on the version branch.
+        # Provenance is not an env switch: pnpm 11 reads no `NPM_CONFIG_*` env, so
+        # guard-publish.mjs passes `--provenance` to every `pnpm publish`, signed
+        # with this job's `id-token: write` identity while the token authenticates.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"
 
       # Hand-written credentials get no post-job unset from actions/checkout, so
       # the header must not outlive the step that needed it.
@@ -248,7 +250,8 @@ jobs:
       - name: Recover version metadata or publish
         uses: changesets/action@63a615b9cd06ba9a3e6d13796c7fbcb080a60a0b # v1.8.0
         with:
-          # Same npm-derived publish as the primary job above.
+          # Same npm-derived publish as the primary job above, `--provenance`
+          # included.
           publish: pnpm run release
           version: pnpm run version-packages
           commit: "chore: version packages"
@@ -257,7 +260,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"
 
       # Same teardown as the primary job: nothing else unsets a hand-written header.
       - name: Remove ephemeral git credentials
